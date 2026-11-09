@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="404 — Fuera del loop · Santiago Servera" description="La página que buscás no existe.">
+  <main id="contenido" class="nf container">
+    <p class="mono accent">[404] · z ∞</p>
+    <h1>Te saliste <em>del loop</em>.</h1>
+    <p class="nf__lede">La página que buscás no existe o cambió de lugar.</p>
+    <a href="/" class="btn btn--primary">Volver al inicio</a>
+  </main>
+</BaseLayout>
+
+<style>
+  .nf {
+    min-height: 100svh;
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: 1.5rem;
+  }
+
+  h1 {
+    font-size: var(--fs-2xl);
+  }
+
+  h1 em {
+    font-family: var(--f-serif);
+    font-weight: 400;
+    color: var(--c-wine-tint);
+  }
+
+  .nf__lede {
+    color: var(--c-fg-muted);
+  }
+</style>

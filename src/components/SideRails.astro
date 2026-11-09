@@ -1,0 +1,301 @@
+---
+/**
+ * Rieles laterales decorativos (solo en pantallas anchas, donde hay margen libre).
+ * Izquierda: flujo de datos ASCII + giroscopio wireframe que acelera con el scroll.
+ * Derecha: regla de profundidad que se desplaza con el scroll + sección actual.
+ */
+import { nav } from '../data/profile';
+
+const GLYPHS = '01·:+*/<>=#';
+const stream = Array.from({ length: 64 }, (_, i) => GLYPHS[(i * 7 + (i % 5) * 3) % GLYPHS.length] + GLYPHS[(i * 3 + 5) % GLYPHS.length]).join('\n');
+const sections = [{ id: 'top', label: 'Inicio' }, ...nav];
+---
+
+<div class="rails" aria-hidden="true" data-rails>
+  <!-- Izquierda -->
+  <div class="rail rail--left">
+    <div class="rail__tag mono">
+      <span class="rail__marquee">Santiago Servera — Full Stack Developer — San Juan, AR — </span>
+    </div>
+    <div class="stream">
+      <pre class="stream__inner mono" data-stream>{stream}</pre>
+    </div>
+    <div class="gyro" data-gyro>
+      <span class="gyro__ring"></span>
+      <span class="gyro__ring"></span>
+      <span class="gyro__ring"></span>
+      <span class="gyro__core"></span>
+    </div>
+  </div>
+
+  <!-- Derecha -->
+  <div class="rail rail--right">
+    <span class="gauge__z mono">z <span data-depth-value>-00.0</span></span>
+    <div class="ruler" data-ruler>
+      <span class="ruler__needle"></span>
+    </div>
+    <ol class="dots">
+      {sections.map((s) => <li data-dot={s.id} />)}
+    </ol>
+    <span class="gauge__label mono" data-depth-label>Inicio</span>
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-rails]');
+  const wide = window.matchMedia('(min-width: 1400px)');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (root) {
+    const stream = root.querySelector<HTMLElement>('[data-stream]')!;
+    const gyro = root.querySelector<HTMLElement>('[data-gyro]')!;
+    const ruler = root.querySelector<HTMLElement>('[data-ruler]')!;
+    const dots = [...root.querySelectorAll<HTMLElement>('[data-dot]')];
+    const GLYPHS = '01·:+*/<>=#';
+    let chars = [...(stream.textContent ?? '')];
+
+    // Punto activo según la sección visible.
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          dots.forEach((d) => d.classList.toggle('is-active', d.dataset.dot === e.target.id));
+        }
+      },
+      { rootMargin: '-45% 0px -50% 0px' },
+    );
+    document.querySelectorAll('main section[id]').forEach((s) => io.observe(s));
+
+    if (!reduced) {
+      let lastY = window.scrollY;
+      let vel = 0;
+      let angle = 0;
+      let lastFlicker = 0;
+      let raf = 0;
+
+      const tick = (now: number) => {
+        const y = window.scrollY;
+        vel += (Math.abs(y - lastY) - vel) * 0.12;
+        lastY = y;
+
+        // Giroscopio: rota lento en reposo y acelera con el scroll.
+        angle += 0.35 + Math.min(vel, 60) * 0.18;
+        gyro.style.setProperty('--a', `${angle}deg`);
+
+        // Regla y flujo se desplazan con el scroll (parallax).
+        ruler.style.backgroundPositionY = `${-y * 0.35}px`;
+        stream.style.transform = `translateY(${-((y * 0.12) % 240)}px)`;
+
+        // Parpadeo de glifos; más cambios cuanto más rápido se scrollea.
+        if (now - lastFlicker > 110) {
+          lastFlicker = now;
+          const n = 2 + Math.min(Math.round(vel / 4), 14);
+          for (let i = 0; i < n; i++) {
+            const idx = (Math.random() * chars.length) | 0;
+            if (chars[idx] !== '\n') chars[idx] = GLYPHS[(Math.random() * GLYPHS.length) | 0];
+          }
+          stream.textContent = chars.join('');
+        }
+        raf = requestAnimationFrame(tick);
+      };
+
+      const start = () => {
+        cancelAnimationFrame(raf);
+        if (wide.matches && !document.hidden) raf = requestAnimationFrame(tick);
+      };
+      wide.addEventListener('change', start);
+      document.addEventListener('visibilitychange', start);
+      start();
+    }
+  }
+</script>
+
+<style>
+  .rails {
+    display: none;
+  }
+
+  @media (min-width: 1400px) {
+    .rails {
+      display: block;
+    }
+  }
+
+  .rail {
+    position: fixed;
+    top: 6.5rem;
+    bottom: 2rem;
+    z-index: 40;
+    width: 2.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    pointer-events: none;
+    color: var(--c-fg-dim);
+  }
+
+  .rail--left {
+    left: 1rem;
+  }
+
+  .rail--right {
+    right: 1rem;
+    justify-content: center;
+  }
+
+  /* ---------- Marquee vertical ---------- */
+  .rail__tag {
+    height: 13rem;
+    overflow: hidden;
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+    font-size: 0.62rem;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent);
+  }
+
+  .rail__marquee {
+    display: inline-block;
+    padding-block: 0.5rem;
+    animation: marquee 22s linear infinite;
+  }
+
+  .rail__marquee::after {
+    content: 'Santiago Servera — Full Stack Developer — San Juan, AR — ';
+  }
+
+  @keyframes marquee {
+    to {
+      transform: translateY(-50%);
+    }
+  }
+
+  /* ---------- Flujo ASCII ---------- */
+  .stream {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent);
+  }
+
+  .stream__inner {
+    margin: 0;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    letter-spacing: 0.3em;
+    text-transform: none;
+    color: var(--c-wine-2);
+    will-change: transform;
+  }
+
+  /* ---------- Giroscopio wireframe (CSS 3D) ---------- */
+  .gyro {
+    --a: 0deg;
+    position: relative;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    transform-style: preserve-3d;
+    perspective: 200px;
+  }
+
+  .gyro__ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--c-wine-tint);
+    opacity: 0.7;
+  }
+
+  .gyro__ring:nth-child(1) {
+    transform: rotateX(70deg) rotateZ(var(--a));
+  }
+
+  .gyro__ring:nth-child(2) {
+    transform: rotateY(70deg) rotateX(calc(var(--a) * 0.7));
+    border-color: var(--c-wine-2);
+  }
+
+  .gyro__ring:nth-child(3) {
+    transform: rotateX(calc(var(--a) * -0.5)) rotateY(calc(var(--a) * 0.9));
+    border-color: rgb(244 244 245 / 0.35);
+  }
+
+  .gyro__core {
+    position: absolute;
+    inset: 44%;
+    border-radius: 50%;
+    background: var(--c-wine-tint);
+    box-shadow: 0 0 10px var(--c-glow);
+  }
+
+  /* ---------- Regla de profundidad ---------- */
+  .gauge__z,
+  .gauge__label {
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+    font-size: 0.62rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .gauge__label {
+    color: var(--c-fg-muted);
+  }
+
+  .ruler {
+    position: relative;
+    width: 14px;
+    height: 150px;
+    background-image:
+      repeating-linear-gradient(to bottom, var(--c-line-strong) 0 1px, transparent 1px 6px),
+      repeating-linear-gradient(to bottom, rgb(244 244 245 / 0.35) 0 1px, transparent 1px 30px);
+    background-size:
+      6px 100%,
+      14px 100%;
+    background-repeat: repeat-y;
+    background-position: right top;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent);
+  }
+
+  .ruler__needle {
+    position: absolute;
+    left: -6px;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: var(--c-wine-tint);
+    box-shadow: 0 0 8px var(--c-glow);
+  }
+
+  .dots {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .dots li {
+    width: 5px;
+    height: 5px;
+    rotate: 45deg;
+    border: 1px solid var(--c-fg-dim);
+    transition:
+      background-color 0.4s,
+      border-color 0.4s,
+      scale 0.4s var(--ease-out);
+  }
+
+  .dots li:global(.is-active) {
+    background: var(--c-wine-tint);
+    border-color: var(--c-wine-tint);
+    scale: 1.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rail__marquee {
+      animation: none;
+    }
+  }
+</style>

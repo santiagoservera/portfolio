@@ -1,0 +1,280 @@
+---
+/**
+ * Campo ASCII de pantalla completa, muy tenue, detrás del contenido.
+ *
+ * Cada sección ([data-field]) define un patrón; el campo mezcla los patrones según
+ * cuánto se ve cada sección, así cambia de forma suave a lo largo de toda la página:
+ *   waves   → ondas horizontales lentas (líneas de terminal)
+ *   streams → corrientes de caracteres que suben (un log)
+ *   grid    → retícula de ventanas con un brillo diagonal
+ *   orbits  → ondas concéntricas desde la órbita de tecnologías ([data-field-center])
+ *   loop    → espiral que converge en el toroide de contacto ([data-field-center])
+ *
+ * El cursor es una lente: aclara el campo y lo vuelve "código". Reacciones al hover
+ * ([data-field-react]): flow (acelera), band (franja a la altura del elemento),
+ * ripple (onda desde el elemento). Con movimiento reducido no se dibuja.
+ */
+---
+
+<canvas class="field" aria-hidden="true" data-ascii-field></canvas>
+
+<script>
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-ascii-field]');
+  const ctx = canvas?.getContext('2d');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (canvas && ctx && !reduced) {
+    const mobile = window.matchMedia('(max-width: 760px)').matches;
+    const CW = mobile ? 13 : 11; // ancho de celda
+    const CH = mobile ? 20 : 18; // alto de celda
+    const FPS = mobile ? 20 : 24;
+    const RAMP = ' ·.:-=+*';
+    const CODE = '01<>/{}[]=';
+
+    type Theme = 'waves' | 'streams' | 'grid' | 'orbits' | 'loop';
+    const sections = [...document.querySelectorAll<HTMLElement>('section[data-field]')].map((el) => ({
+      el,
+      theme: el.dataset.field as Theme,
+      center: el.querySelector<HTMLElement>('[data-field-center]'),
+      w: 0,
+      // posiciones absolutas en el documento (se miden al cargar y al redimensionar)
+      top: 0,
+      bottom: 0,
+      cx: 0,
+      cy: 0,
+    }));
+    const hero = document.querySelector<HTMLElement>('.hero');
+    let heroBottom = 0;
+
+    // Medir el layout una sola vez (y cuando cambia): en cada cuadro solo se usa el scroll,
+    // así el campo nunca obliga al navegador a recalcular el layout.
+    let measured = false;
+    const measure = () => {
+      measured = true;
+      const sy = window.scrollY;
+      for (const s of sections) {
+        const r = s.el.getBoundingClientRect();
+        s.top = r.top + sy;
+        s.bottom = r.bottom + sy;
+        if (s.center) {
+          const c = s.center.getBoundingClientRect();
+          s.cx = c.left + c.width / 2;
+          s.cy = c.top + c.height / 2 + sy;
+        } else {
+          s.cx = window.innerWidth * 0.7;
+          s.cy = (s.top + s.bottom) / 2;
+        }
+      }
+      heroBottom = hero ? hero.getBoundingClientRect().bottom + sy : 0;
+    };
+    let measureQueued = false;
+    const queueMeasure = () => {
+      if (measureQueued) return;
+      measureQueued = true;
+      requestAnimationFrame(() => {
+        measureQueued = false;
+        measure();
+      });
+    };
+    new ResizeObserver(queueMeasure).observe(document.body);
+    window.addEventListener('load', queueMeasure, { once: true });
+
+    let W = 0, H = 0, cols = 0, rows = 0;
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.font = `${mobile ? 12 : 11}px "Geist Mono Variable", ui-monospace, monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      cols = Math.ceil(W / CW) + 1;
+      rows = Math.ceil(H / CH) + 1;
+    };
+    resize();
+    window.addEventListener('resize', () => {
+      resize();
+      queueMeasure();
+    }, { passive: true });
+
+    // Fase aleatoria (determinista) por columna, para las corrientes
+    const phase = Array.from({ length: 400 }, (_, i) => ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1);
+    const hash = (x: number, y: number, t: number) => {
+      const s = Math.sin(x * 127.1 + y * 311.7 + t * 0.7) * 43758.5453;
+      return s - Math.floor(s);
+    };
+
+    /* ---------- Entrada ---------- */
+    const cursor = { x: -9999, y: -9999, sx: -9999, sy: -9999, on: 0, target: 0 };
+    let react: { mode: string; el: HTMLElement } | null = null;
+    const ripples: { x: number; y: number; t0: number }[] = [];
+    let flow = 0, band = 0, bandY = 0, bandAbs = 0;
+
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerType !== 'mouse') return;
+        cursor.x = e.clientX;
+        cursor.y = e.clientY;
+        cursor.target = 1;
+        const t = (e.target as Element)?.closest?.<HTMLElement>('[data-field-react]') ?? null;
+        if (t && t !== react?.el) {
+          react = { mode: t.dataset.fieldReact ?? '', el: t };
+          // se mide solo al entrar en el elemento (no en cada cuadro)
+          const r = t.getBoundingClientRect();
+          if (react.mode === 'ripple') ripples.push({ x: r.left + r.width / 2, y: r.top + r.height / 2, t0: performance.now() });
+          if (react.mode === 'band') bandAbs = r.top + r.height / 2 + window.scrollY;
+        } else if (!t) react = null;
+      },
+      { passive: true },
+    );
+    document.documentElement.addEventListener('pointerleave', () => {
+      cursor.target = 0;
+      react = null;
+    });
+    window.addEventListener(
+      'pointerdown',
+      (e) => ripples.push({ x: e.clientX, y: e.clientY, t0: performance.now() }),
+      { passive: true },
+    );
+
+    const approach = (dt: number, k: number) => 1 - Math.exp(-dt * k);
+
+    // primera medición en un momento libre: no compite con la carga
+    if ('requestIdleCallback' in window) requestIdleCallback(measure, { timeout: 1500 });
+    else setTimeout(measure, 300);
+    let last = performance.now(), lastDraw = 0, time = 0, cleared = false;
+    const colN = new Float32Array(400), colW = new Float32Array(400), colS = new Float32Array(400), rowN = new Float32Array(200);
+
+    const frame = (now: number) => {
+      requestAnimationFrame(frame);
+      if (document.hidden) return;
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+
+      // reacciones (suavizadas)
+      flow += ((react?.mode === 'flow' ? 1 : 0) - flow) * approach(dt, 3);
+      band += ((react?.mode === 'band' ? 1 : 0) - band) * approach(dt, 4);
+      const sy = window.scrollY;
+      if (react?.mode === 'band') bandY += (bandAbs - sy - bandY) * approach(dt, 10);
+      cursor.on += (cursor.target - cursor.on) * approach(dt, 3);
+      cursor.sx += (cursor.x - cursor.sx) * approach(dt, 12);
+      cursor.sy += (cursor.y - cursor.sy) * approach(dt, 12);
+      time += dt * (1 + flow * 2.5);
+
+      if (!measured || now - lastDraw < 1000 / FPS) return;
+      lastDraw = now;
+
+      // peso de cada sección: cuánto de ella cubre el centro de la pantalla
+      let total = 0;
+      for (const s of sections) {
+        const overlap = Math.max(0, Math.min(s.bottom - sy, H * 0.85) - Math.max(s.top - sy, H * 0.15));
+        s.w = overlap / (H * 0.7);
+        total += s.w;
+      }
+      // el campo aparece recién después del hero (ahí manda el túnel)
+      const heroFade = hero ? Math.min(1, Math.max(0, 1 - (heroBottom - sy) / H) * 1.6) : 1;
+      const global = Math.min(1, total) * heroFade;
+
+      // Si no se ve, no toca el canvas (evita repintar la pantalla entera en cada cuadro)
+      if (global < 0.01) {
+        if (!cleared) ctx.clearRect(0, 0, W, H);
+        cleared = true;
+        return;
+      }
+      ctx.clearRect(0, 0, W, H);
+      cleared = false;
+
+      const t = time;
+      const active = sections.filter((s) => s.w > 0.01).map((s) => ({ ...s, c: { x: s.cx, y: s.cy - sy } }));
+      const lensR = mobile ? 0 : 150;
+      const lens2 = 2 * lensR * lensR;
+      const live = ripples.filter((r) => now - r.t0 < 2200);
+      ripples.length = 0;
+      ripples.push(...live);
+
+      // Términos por columna y por fila (se calculan una vez por cuadro, no por celda)
+      for (let gx = 0; gx < cols; gx++) {
+        const x = gx * CW + CW / 2;
+        colN[gx] = Math.sin(x * 0.011 + t * 0.15);
+        colW[gx] = Math.sin(x * 0.004 + t * 0.25) * 2.2;
+        const ph = phase[gx % phase.length];
+        colS[gx] = gx % 5 === 0 ? t * (0.08 + ph * 0.08) + ph : -1;
+      }
+      for (let gy = 0; gy < rows; gy++) rowN[gy] = Math.cos(gy * CH * 0.014 - t * 0.12);
+
+      const has = (k: Theme) => active.find((s) => s.theme === k);
+      const sWaves = has('waves'), sStreams = has('streams'), sGrid = has('grid'), sOrb = has('orbits'), sLoop = has('loop');
+      const maxD = W * 0.8;
+
+      for (let gy = 0; gy < rows; gy++) {
+        const y = gy * CH + CH / 2;
+        const yWave = y * 0.045 - t * 0.5;
+        const yStream = (y / H) * 1.4;
+        for (let gx = 0; gx < cols; gx++) {
+          const x = gx * CW + CW / 2;
+          // textura de fondo (0.45–1): hace el campo orgánico y disperso
+          const n = 0.725 + 0.275 * colN[gx] * rowN[gy];
+
+          let I = 0;
+          if (sWaves) I += (0.5 + 0.5 * Math.sin(yWave + colW[gx])) ** 10 * sWaves.w;
+          if (sStreams && colS[gx] >= 0) {
+            const u = (((yStream + colS[gx]) % 1) + 1) % 1;
+            I += u ** 6 * sStreams.w;
+          }
+          if (sGrid && (gx % 14 === 0 || gy % 8 === 0)) I += (0.2 + 0.8 * (0.5 + 0.5 * Math.sin((x + y) * 0.005 - t * 0.7)) ** 8) * sGrid.w;
+          if (sOrb) {
+            const d = Math.hypot(x - sOrb.c.x, y - sOrb.c.y);
+            if (d < maxD) I += (0.5 + 0.5 * Math.sin(d * 0.045 - t * 1.1)) ** 12 * (1 - d / maxD) * sOrb.w;
+          }
+          if (sLoop) {
+            const dx = x - sLoop.c.x, dy = y - sLoop.c.y;
+            const d = Math.hypot(dx, dy);
+            if (d < maxD && d > 40) {
+              // espiral de dos brazos que fluye hacia el centro
+              I += (0.5 + 0.5 * Math.sin(d * 0.04 + Math.atan2(dy, dx) * 2 + t * 1.2)) ** 10 * Math.min(1, d / 160) * (1 - d / maxD) * sLoop.w;
+            }
+          }
+          I *= n * global;
+
+          if (band > 0.01) I += band * Math.exp(-((y - bandY) ** 2) / 700) * 0.5 * n;
+          for (const r of live) {
+            const age = (now - r.t0) / 1000;
+            const d = Math.hypot(x - r.x, y - r.y);
+            I += Math.exp(-((d - age * 420) ** 2) / 400) * (1 - age / 2.2) * 0.6;
+          }
+          if (I < 0.06) continue;
+
+          // lente del cursor: solo realza lo que ya existe
+          let L = 0;
+          if (cursor.on > 0.01) {
+            const d2 = (x - cursor.sx) ** 2 + (y - cursor.sy) ** 2;
+            if (d2 < lens2 * 3) L = Math.exp(-d2 / lens2) * cursor.on;
+          }
+
+          const alpha = Math.min(0.9, I * 0.55 * (1 + L * 1.4));
+          if (alpha < 0.04) continue;
+          const ch = L > 0.5 && hash(gx, gy, Math.floor(t * 3)) < 0.35
+            ? CODE[Math.floor(hash(gy, gx, Math.floor(t * 3)) * CODE.length)]
+            : RAMP[Math.max(1, Math.min(RAMP.length - 1, Math.round(I * (RAMP.length - 1))))];
+          ctx.fillStyle = `rgba(${L > 0.5 ? '244,220,228' : '214,138,160'},${alpha.toFixed(3)})`;
+          ctx.fillText(ch, x, y);
+        }
+      }
+    };
+    requestAnimationFrame(frame);
+  }
+</script>
+
+<style>
+  .field {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; /* detrás del contenido, delante de la galaxia */
+    pointer-events: none;
+  }
+</style>

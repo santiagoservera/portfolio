@@ -1,0 +1,320 @@
+---
+import { Picture } from 'astro:assets';
+import Icon from './Icon.astro';
+import type { Project } from '../data/projects';
+import { asciiField, asciiNoise } from '../lib/ascii';
+
+interface Props {
+  project: Project;
+  index: number;
+}
+
+const { project, index } = Astro.props;
+const field = project.image ? '' : asciiField(project.slug, 90, 30);
+const noise = asciiNoise(project.slug, 48, 18);
+---
+
+<article class="card" data-reveal style={`--d:${index - 1}`} aria-labelledby={`p-${project.slug}`}>
+  <a
+    href={project.url}
+    class="card__media"
+    target="_blank"
+    rel="noopener noreferrer"
+    data-glow
+    tabindex="-1"
+    aria-hidden="true"
+  >
+    <div class="frame">
+      <div class="frame__bar">
+        <span class="frame__dots"><i></i><i></i><i></i></span>
+        <span class="frame__url mono">{project.domain}</span>
+      </div>
+      <div class="frame__screen">
+        {
+          project.image ? (
+            <Picture
+              src={project.image}
+              alt=""
+              formats={['avif', 'webp']}
+              widths={[360, 560, 800, 1100]}
+              sizes="(max-width: 760px) calc(100vw - 2rem), (max-width: 1199px) 45vw, 310px"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <pre class="field" data-placeholder={project.slug}>{field}</pre>
+          )
+        }
+        <!-- Escaneo ASCII: una franja de glifos recorre la captura al pasar el mouse -->
+        <pre class="scan">{noise}</pre>
+      </div>
+    </div>
+  </a>
+
+  <div class="card__body">
+    <div class="card__head">
+      <span class="card__meta mono">
+        <span class="card__idx" aria-hidden="true">{String(index).padStart(2, '0')}</span>
+        <span class="card__kind">{project.kind}</span>
+      </span>
+      <h3 id={`p-${project.slug}`} class="card__title">{project.name}</h3>
+    </div>
+    <p class="card__summary">{project.summary}</p>
+    <a href={project.url} class="card__link mono" target="_blank" rel="noopener noreferrer">
+      {project.domain}
+      <Icon name="arrow-up-right" />
+      <span class="sr-only">(se abre en una pestaña nueva)</span>
+    </a>
+  </div>
+</article>
+
+<script>
+  // Campo ASCII vivo: la interferencia avanza como una onda mientras está en pantalla.
+  import { asciiField } from '../lib/ascii';
+
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll<HTMLElement>('[data-placeholder]').forEach((el) => {
+      const seed = el.dataset.placeholder ?? '';
+      let phase = 0;
+      let timer = 0;
+      new IntersectionObserver(([e]) => {
+        window.clearInterval(timer);
+        if (!e.isIntersecting) return;
+        timer = window.setInterval(() => {
+          phase += 0.22;
+          el.textContent = asciiField(seed, 90, 30, phase);
+        }, 80);
+      }).observe(el);
+    });
+  }
+</script>
+
+<style>
+  .card {
+    display: grid;
+    /* minmax(0) evita que un dominio largo ensanche la tarjeta */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    align-content: start;
+  }
+
+  .card__media {
+    display: block;
+    perspective: 1200px;
+  }
+
+  .frame {
+    position: relative;
+    border-radius: var(--radius);
+    border: 1px solid var(--c-line-strong);
+    background: var(--c-surface);
+    overflow: hidden;
+    transition:
+      transform 0.7s var(--ease-out),
+      border-color 0.4s,
+      box-shadow 0.7s var(--ease-out);
+  }
+
+  .frame::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgb(139 46 74 / 0.22), transparent 45%);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+
+  .card:hover .frame {
+    transform: rotateX(3deg) translateY(-4px);
+    border-color: rgb(214 138 160 / 0.35);
+    box-shadow: 0 30px 60px -35px var(--c-glow);
+  }
+
+  .card:hover .frame::after {
+    opacity: 1;
+  }
+
+  .frame__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 2.1rem;
+    padding: 0 0.85rem;
+    border-bottom: 1px solid var(--c-line);
+    background: var(--c-surface-2);
+  }
+
+  .frame__dots {
+    display: flex;
+    gap: 5px;
+  }
+
+  .frame__dots i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid var(--c-line-strong);
+  }
+
+  .frame__url {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    text-transform: none;
+    color: var(--c-fg-dim);
+    padding-right: 2.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .frame__screen {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 60%, rgb(109 33 60 / 0.3), transparent 70%), var(--c-surface);
+  }
+
+  .frame__screen :global(picture) {
+    display: block;
+    height: 100%;
+  }
+
+  .frame__screen :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    /* levemente atenuada para convivir con el fondo oscuro; se aclara al pasar el mouse */
+    filter: brightness(0.82) saturate(0.9);
+    transition:
+      filter 0.5s var(--ease-out),
+      transform 1.2s var(--ease-out);
+  }
+
+  .card:hover .frame__screen :global(img) {
+    filter: none;
+    transform: scale(1.03);
+  }
+
+  .field {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    font-family: var(--f-mono);
+    font-size: clamp(4px, 0.5vw, 8px);
+    line-height: 1.2;
+    color: var(--c-wine-2);
+    user-select: none;
+  }
+
+  .scan {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    line-height: 1.25;
+    color: var(--c-wine-tint);
+    mix-blend-mode: screen;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    /* solo se ve una franja horizontal que baja */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 40%, #000 60%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 40%, #000 60%, transparent);
+    -webkit-mask-size: 100% 28%;
+    mask-size: 100% 28%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: 0 -40%;
+    mask-position: 0 -40%;
+  }
+
+  .card:hover .scan {
+    animation: scan 1.3s var(--ease-in-out) 1;
+  }
+
+  @keyframes scan {
+    0% {
+      opacity: 0.9;
+      -webkit-mask-position: 0 -40%;
+      mask-position: 0 -40%;
+    }
+    85% {
+      opacity: 0.9;
+    }
+    100% {
+      opacity: 0;
+      -webkit-mask-position: 0 140%;
+      mask-position: 0 140%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card:hover .scan {
+      animation: none;
+    }
+  }
+
+  .card__head {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .card__meta {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .card__idx {
+    color: var(--c-wine-tint);
+  }
+
+  .card__kind {
+    color: var(--c-fg-dim);
+  }
+
+  .card__title {
+    font-size: var(--fs-lg);
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+  }
+
+  .card__summary {
+    color: var(--c-fg-muted);
+    font-size: var(--fs-sm);
+    max-width: 52ch;
+  }
+
+  .card__link {
+    justify-self: start;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 32px;
+    text-transform: none;
+    font-size: var(--fs-sm);
+    color: var(--c-fg);
+    background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+    transition:
+      background-size 0.4s var(--ease-out),
+      color 0.3s;
+  }
+
+  .card__link:hover {
+    background-size: 100% 1px;
+    color: var(--c-wine-tint);
+  }
+
+  .card__link :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+</style>

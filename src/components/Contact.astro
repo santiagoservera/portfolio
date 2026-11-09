@@ -1,0 +1,316 @@
+---
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import Icon from './Icon.astro';
+import { renderTorus } from '../scripts/ascii-torus';
+import { profile } from '../data/profile';
+
+// El CV es un archivo estático opcional: si todavía no está en /public, no se ofrece un enlace roto.
+const torus = renderTorus(70, 32, 0.9, 0.4);
+const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
+---
+
+<section id="contacto" class="section contact" data-field="loop" data-label="Contacto" aria-labelledby="contacto-title">
+  <div class="container contact__grid">
+    <div class="contact__main">
+      <div class="coord mono" aria-hidden="true">
+        <span class="coord__idx">[05]</span>
+        <span>Contacto</span>
+        <span class="coord__z">z -1.00 · cierre del loop</span>
+      </div>
+
+      <h2 id="contacto-title" class="contact__title">
+        ¿Construimos <em>algo</em>?
+      </h2>
+
+      <p class="contact__lede">
+        Abierto a oportunidades laborales, colaboraciones y proyectos.
+      </p>
+
+      <div class="mail" data-reveal>
+        <a href={`mailto:${profile.email}`} class="mail__link" data-field-react="flow">
+          <Icon name="mail" class="mail__icon" />
+          <span data-copy-text>{profile.email}</span>
+        </a>
+        <button type="button" class="mail__copy mono" data-copy={profile.email}>
+          <Icon name="copy" />
+          <span data-copy-label>Copiar</span>
+        </button>
+        <span class="sr-only" role="status" aria-live="polite" data-copy-status></span>
+      </div>
+
+      <ul class="channels" data-reveal style="--d:1">
+        <li>
+          <a href={profile.links.github} class="channel" data-field-react="flow" target="_blank" rel="noopener noreferrer">
+            <Icon name="github" />
+            <span class="channel__name">GitHub</span>
+            <span class="channel__handle mono">/santiagoservera</span>
+            <Icon name="arrow-up-right" class="channel__arrow" />
+            <span class="sr-only">(se abre en una pestaña nueva)</span>
+          </a>
+        </li>
+        <li>
+          <a href={profile.links.linkedin} class="channel" data-field-react="flow" target="_blank" rel="noopener noreferrer">
+            <Icon name="linkedin" />
+            <span class="channel__name">LinkedIn</span>
+            <span class="channel__handle mono">/in/santiago-servera</span>
+            <Icon name="arrow-up-right" class="channel__arrow" />
+            <span class="sr-only">(se abre en una pestaña nueva)</span>
+          </a>
+        </li>
+        <li>
+          {
+            hasCv ? (
+              <a href={profile.cvPath} class="channel" data-field-react="flow" download>
+                <Icon name="download" />
+                <span class="channel__name">Currículum</span>
+                <span class="channel__handle mono">PDF</span>
+                <Icon name="arrow-down" class="channel__arrow" />
+              </a>
+            ) : (
+              <span class="channel channel--disabled" aria-disabled="true">
+                <Icon name="download" />
+                <span class="channel__name">Currículum</span>
+                <span class="channel__handle mono">Próximamente</span>
+              </span>
+            )
+          }
+        </li>
+      </ul>
+    </div>
+
+    <div class="contact__art" aria-hidden="true" data-field-center>
+      <pre class="torus" data-torus data-cols="70" data-rows="32">{torus}</pre>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { mountTorus } from '../scripts/ascii-torus';
+  const el = document.querySelector<HTMLElement>('[data-torus]');
+  // los enlaces de contacto aceleran el loop
+  let boost = 0;
+  document.querySelectorAll('[data-field-react="flow"]').forEach((a) => {
+    a.addEventListener('pointerenter', () => (boost = 1));
+    a.addEventListener('pointerleave', () => (boost = 0));
+  });
+  if (el) mountTorus(el, window.matchMedia('(prefers-reduced-motion: reduce)').matches, () => boost);
+</script>
+
+<style>
+  .contact {
+    padding-bottom: clamp(5rem, 9vw, 8rem);
+    overflow: hidden;
+  }
+
+  .contact__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .contact__main {
+    display: grid;
+    gap: 1.75rem;
+  }
+
+  .coord {
+    display: flex;
+    gap: 0.9rem;
+  }
+
+  .coord__idx {
+    color: var(--c-wine-tint);
+  }
+
+  .coord__z {
+    color: var(--c-fg-dim);
+  }
+
+  .contact__title {
+    font-size: clamp(3rem, 1.2rem + 7.5vw, 8.5rem);
+    letter-spacing: -0.055em;
+    line-height: 0.92;
+  }
+
+  .contact__title em {
+    font-family: var(--f-serif);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--c-wine-tint);
+  }
+
+  .contact__lede {
+    max-width: 46ch;
+    color: var(--c-fg-muted);
+    font-size: var(--fs-md);
+  }
+
+  .mail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    padding-block: 1.5rem;
+    border-block: 1px solid var(--c-line-strong);
+  }
+
+  .mail__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: 0;
+    font-size: clamp(1.1rem, 0.7rem + 1.9vw, 2rem);
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
+    background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+    transition: background-size 0.5s var(--ease-out);
+  }
+
+  .mail__link:hover {
+    background-size: 100% 1px;
+  }
+
+  /* Al copiar: el email también responde (no solo el botón) */
+  .mail:global(.is-copied) .mail__link {
+    color: var(--c-wine-tint);
+    background-image: linear-gradient(90deg, var(--c-wine-2), var(--c-wine-tint));
+    background-size: 100% 1px;
+    transition:
+      color 0.3s var(--ease-out),
+      background-size 0.6s var(--ease-out);
+  }
+
+  .mail:global(.is-copied) .mail__copy {
+    color: var(--c-white);
+    border-color: var(--c-wine-tint);
+    background: rgb(109 33 60 / 0.35);
+  }
+
+  .mail__link :global(.mail__icon) {
+    width: 0.9em;
+    height: 0.9em;
+    flex: none;
+    color: var(--c-wine-tint);
+  }
+
+  .mail__copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.4rem 0.9rem;
+    margin-left: auto;
+    border-radius: 999px;
+    border: 1px solid var(--c-line-strong);
+    color: var(--c-fg-muted);
+    transition:
+      color 0.25s,
+      border-color 0.25s;
+  }
+
+  .mail__copy:hover {
+    color: var(--c-white);
+    border-color: var(--c-wine-2);
+  }
+
+  .mail__copy :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+
+  .channels {
+    display: grid;
+  }
+
+  .channel {
+    display: grid;
+    grid-template-columns: 1.25rem auto 1fr 1rem;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.05rem 0.25rem;
+    border-bottom: 1px solid var(--c-line);
+    transition:
+      padding 0.4s var(--ease-out),
+      background-color 0.3s;
+  }
+
+  .channel :global(svg) {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  .channel__name {
+    font-size: var(--fs-md);
+    font-weight: 500;
+  }
+
+  .channel__handle {
+    color: var(--c-fg-dim);
+    text-transform: none;
+  }
+
+  .channel :global(.channel__arrow) {
+    color: var(--c-fg-dim);
+  }
+
+  a.channel:hover {
+    padding-left: 0.9rem;
+    background: linear-gradient(to right, rgb(109 33 60 / 0.25), transparent 70%);
+  }
+
+  a.channel:hover :global(.channel__arrow) {
+    color: var(--c-white);
+  }
+
+  .channel--disabled {
+    color: var(--c-fg-dim);
+  }
+
+  .contact__art {
+    display: grid;
+    place-items: center;
+  }
+
+  .torus {
+    margin: 0;
+    font-family: var(--f-mono);
+    font-size: clamp(6px, 0.9vw, 12px);
+    line-height: 1.1;
+    background: linear-gradient(160deg, var(--c-white) 5%, var(--c-wine-tint) 35%, var(--c-wine-2) 60%, var(--c-wine) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    user-select: none;
+  }
+
+  @media (max-width: 899px) {
+    .contact__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .contact__art {
+      order: -1;
+      opacity: 0.85;
+    }
+
+    .torus {
+      font-size: 12px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .channel {
+      grid-template-columns: 1.25rem 1fr 1rem;
+    }
+
+    .channel__handle {
+      display: none;
+    }
+
+    .mail__copy {
+      margin-left: 0;
+    }
+  }
+</style>

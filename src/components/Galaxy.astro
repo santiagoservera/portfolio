@@ -1,0 +1,166 @@
+---
+/**
+ * Fondo de galaxia detrás de todo el sitio: nebulosa difusa en los bordós de la paleta
+ * + estrellas levemente desenfocadas. Las estrellas se dibujan una sola vez en un canvas
+ * (no hay loop de animación); solo se desplazan un poco con el scroll.
+ */
+---
+
+<div class="galaxy" aria-hidden="true">
+  <div class="galaxy__nebula"></div>
+  <div class="galaxy__band"></div>
+  <canvas class="galaxy__stars" data-stars></canvas>
+</div>
+
+<script>
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-stars]');
+  const ctx = canvas?.getContext('2d');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (canvas && ctx) {
+    // Generador determinista: las estrellas no "saltan" al redimensionar.
+    const rand = (() => {
+      let s = 1337;
+      return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+    })();
+
+    const draw = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      const count = Math.round((w * h) / 5200);
+      // La franja de la galaxia cruza en diagonal: más estrellas cerca de ella.
+      const angle = (-22 * Math.PI) / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+
+      for (let i = 0; i < count; i++) {
+        let x = rand() * w;
+        let y = rand() * h;
+        if (rand() < 0.45) {
+          // Reubica parte de las estrellas sobre la franja (distribución aprox. normal).
+          const t = (rand() - 0.5) * Math.hypot(w, h);
+          const off = (rand() + rand() + rand() - 1.5) * h * 0.12;
+          x = w / 2 + t * cos - off * sin;
+          y = h / 2 + t * sin + off * cos;
+        }
+        const big = rand() < 0.04;
+        const r = big ? 1 + rand() * 0.8 : 0.25 + rand() * 0.75;
+        const a = big ? 0.55 + rand() * 0.3 : 0.12 + rand() * 0.45;
+        const tint = rand() < 0.18 ? '214, 138, 160' : '244, 244, 245';
+
+        // Resplandor de las estrellas grandes: un halo tenue (más barato que shadowBlur)
+        if (big) {
+          ctx.beginPath();
+          ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${tint}, ${(a * 0.18).toFixed(3)})`;
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${tint}, ${a})`;
+        ctx.fill();
+      }
+    };
+
+    let resizeTimer = 0;
+    window.addEventListener(
+      'resize',
+      () => {
+        window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(draw, 200);
+      },
+      { passive: true },
+    );
+    // se dibuja cuando el navegador está libre: no compite con la carga de la página
+    if ('requestIdleCallback' in window) requestIdleCallback(draw, { timeout: 3000 });
+    else setTimeout(draw, 800);
+
+    // Parallax sutil: el cielo se mueve mucho más lento que el contenido.
+    if (!reduced) {
+      const root = canvas.parentElement!;
+      let ticking = false;
+      window.addEventListener(
+        'scroll',
+        () => {
+          if (ticking) return;
+          ticking = true;
+          requestAnimationFrame(() => {
+            ticking = false;
+            const max = document.documentElement.scrollHeight - window.innerHeight;
+            const p = max > 0 ? window.scrollY / max : 0;
+            root.style.setProperty('--p', p.toFixed(4));
+          });
+        },
+        { passive: true },
+      );
+    }
+  }
+</script>
+
+<style>
+  .galaxy {
+    --p: 0;
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* Nubes de gas: bordós de la paleta, muy difusas */
+  .galaxy__nebula {
+    position: absolute;
+    inset: -20%;
+    background:
+      radial-gradient(38% 30% at 22% 28%, rgb(109 33 60 / 0.35), transparent 70%),
+      radial-gradient(32% 26% at 78% 72%, rgb(139 46 74 / 0.25), transparent 70%),
+      radial-gradient(26% 20% at 62% 22%, rgb(109 33 60 / 0.16), transparent 70%),
+      radial-gradient(30% 24% at 30% 85%, rgb(139 46 74 / 0.12), transparent 70%);
+    filter: blur(60px);
+    transform: translate3d(0, calc(var(--p) * -6vh), 0);
+    animation: drift 90s var(--ease-in-out) infinite alternate;
+  }
+
+  /* Franja tenue tipo vía láctea */
+  .galaxy__band {
+    position: absolute;
+    left: -25%;
+    right: -25%;
+    top: 50%;
+    height: 34vh;
+    translate: 0 -50%;
+    rotate: -22deg;
+    background: radial-gradient(50% 50% at 50% 50%, rgb(244 244 245 / 0.045), rgb(214 138 160 / 0.03) 45%, transparent 75%);
+    filter: blur(40px);
+  }
+
+  .galaxy__stars {
+    position: absolute;
+    left: 0;
+    top: -8vh;
+    width: 100%;
+    height: 116vh;
+    filter: blur(0.5px);
+    opacity: 0.85;
+    transform: translate3d(0, calc(var(--p) * -8vh), 0);
+  }
+
+  @keyframes drift {
+    to {
+      translate: 3% -2%;
+      scale: 1.06;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .galaxy__nebula {
+      animation: none;
+    }
+  }
+</style>

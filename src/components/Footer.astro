@@ -1,0 +1,64 @@
+---
+import { profile } from '../data/profile';
+import { asciiRule } from '../lib/ascii';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="footer__rule" aria-hidden="true" data-signal data-sig={asciiRule(220, 12)}></div>
+  <div class="container footer__inner mono">
+    <span>© {year} {profile.name}</span>
+    <span class="footer__made">Diseñado y desarrollado con Astro · San Juan, AR</span>
+    <a href="#top" class="footer__top">Volver al inicio ↑</a>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    padding-bottom: 2rem;
+  }
+
+  .footer__rule {
+    overflow: hidden;
+    white-space: nowrap;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--c-line-strong);
+    margin-bottom: 1.5rem;
+    user-select: none;
+  }
+
+  .footer__rule::before {
+    content: attr(data-sig);
+  }
+
+  .footer__rule:global(.is-live) {
+    white-space: pre;
+    line-height: 1.2;
+    color: rgb(214 138 160 / 0.35);
+  }
+
+  .footer__inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 2rem;
+    color: var(--c-fg-dim);
+  }
+
+  .footer__top {
+    margin-left: auto;
+    color: var(--c-fg-muted);
+    transition: color 0.25s;
+  }
+
+  .footer__top:hover {
+    color: var(--c-white);
+  }
+
+  @media (max-width: 600px) {
+    .footer__top {
+      margin-left: 0;
+    }
+  }
+</style>

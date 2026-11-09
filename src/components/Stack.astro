@@ -1,0 +1,438 @@
+---
+import SectionHead from './SectionHead.astro';
+import TechLogo from './TechLogo.astro';
+import { stackGroups, workflow, type Tech } from '../data/stack';
+
+// Todas las tecnologías en órbita: la principal al centro y el resto por anillos.
+const all = stackGroups.flatMap((g) => g.items.map((t) => ({ ...t, ring: g.ring })));
+const core = all.find((t) => t.main) ?? all[0];
+const rings = ([1, 2, 3] as const).map((ring) => {
+  const items = all.filter((t) => t.ring === ring && t.id !== core.id);
+  const offset = ring * 23; // desfase para que los anillos no queden alineados
+  return { ring, items: items.map((t, i) => ({ ...t, angle: offset + (360 / items.length) * i })) };
+});
+const isMain = (t: Tech) => t.id === core.id;
+---
+
+<section id="tecnologias" class="section stack" data-field="orbits" data-label="Tecnologías" aria-labelledby="tecnologias-title">
+  <div class="container stack__grid">
+    <div class="stack__head">
+      <SectionHead index={4} title="Tecnologías" id="tecnologias-title" depth="-0.75" />
+    </div>
+
+    <div class="orbit" aria-hidden="true" data-orbit data-field-center>
+      {
+        rings.map(({ ring, items }) => (
+          <div class={`ring ring--${ring}`}>
+            {items.map((t) => (
+              <div class="slot" style={`--t:${t.angle}deg`}>
+                <div class="planet" data-planet={t.id}>
+                  <div class="planet__inner">
+                    <TechLogo id={t.id} class="planet__logo" />
+                    <span class="planet__name mono">{t.name}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))
+      }
+      <div class="core" data-planet={core.id}>
+        <TechLogo id={core.id} class="core__logo" />
+      </div>
+    </div>
+
+    <dl class="groups">
+      {
+        stackGroups.map((g, gi) => (
+          <div class="group" data-reveal style={`--d:${gi}`}>
+            <dt class="group__label mono">{g.label}</dt>
+            <dd class="group__items">
+              {g.items.map((t) => (
+                <span class:list={['item', { 'item--main': isMain(t) }]} data-tech={t.id} data-field-react="ripple">
+                  {t.name}
+                  {isMain(t) && <span class="item__tag mono">principal</span>}
+                </span>
+              ))}
+            </dd>
+          </div>
+        ))
+      }
+    </dl>
+
+    <div class="workflow" data-reveal>
+      <div class="workflow__head">
+        <TechLogo id="claude" class="workflow__logo" />
+        <div>
+          <p class="workflow__kicker mono">Criterio</p>
+          <h3 class="workflow__title">{workflow.title}</h3>
+        </div>
+      </div>
+      <p class="workflow__body">{workflow.body}</p>
+      <ul class="workflow__tags mono">
+        {workflow.tags.map((t) => <li>{t}</li>)}
+      </ul>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Al pasar por un nombre de la lista se ilumina su logo en la órbita (y viceversa).
+  const orbit = document.querySelector<HTMLElement>('[data-orbit]');
+  if (orbit) {
+    const highlight = (id: string | null) => {
+      document.querySelectorAll<HTMLElement>('[data-planet], [data-tech]').forEach((el) => {
+        el.classList.toggle('is-hl', id !== null && (el.dataset.planet === id || el.dataset.tech === id));
+      });
+      orbit.classList.toggle('has-hl', id !== null);
+    };
+    document.querySelectorAll<HTMLElement>('[data-tech]').forEach((el) => {
+      el.addEventListener('pointerenter', () => highlight(el.dataset.tech ?? null));
+      el.addEventListener('pointerleave', () => highlight(null));
+    });
+    orbit.querySelectorAll<HTMLElement>('[data-planet]').forEach((el) => {
+      el.addEventListener('pointerenter', () => highlight(el.dataset.planet ?? null));
+      el.addEventListener('pointerleave', () => highlight(null));
+    });
+  }
+</script>
+
+<style>
+  /* los anillos giran: sus cajas rotadas no deben generar scroll horizontal */
+  .stack {
+    overflow-x: clip;
+  }
+
+  .stack__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 2rem clamp(2rem, 5vw, 5rem);
+  }
+
+  .stack__head {
+    grid-column: 1 / -1;
+  }
+
+  /* ---------- Órbita ---------- */
+  .orbit {
+    --planet: 46px;
+    position: relative;
+    width: min(100%, 500px);
+    aspect-ratio: 1;
+    margin-inline: auto;
+  }
+
+  .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid var(--c-line-strong);
+    animation: spin var(--dur) linear infinite;
+  }
+
+  .ring--1 {
+    inset: 22%;
+    --dur: 70s;
+  }
+
+  .ring--2 {
+    inset: 10%;
+    --dur: 110s;
+    animation-direction: reverse;
+    border-color: var(--c-line);
+  }
+
+  .ring--3 {
+    inset: 0;
+    --dur: 150s;
+    border-style: dashed;
+    border-color: var(--c-line);
+  }
+
+  .slot {
+    position: absolute;
+    inset: 0;
+    transform: rotate(var(--t));
+  }
+
+  /* El planeta se ubica sobre el borde del anillo y compensa los giros para quedar derecho. */
+  .planet {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--planet);
+    height: var(--planet);
+    transform: translate(-50%, -50%) rotate(calc(-1 * var(--t)));
+  }
+
+  .planet__inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    padding: 11px;
+    border-radius: 50%;
+    background: var(--c-surface);
+    border: 1px solid var(--c-line-strong);
+    animation: spin var(--dur) linear infinite;
+    animation-direction: reverse;
+    transition:
+      border-color 0.3s,
+      box-shadow 0.3s,
+      scale 0.4s var(--ease-out),
+      opacity 0.3s;
+  }
+
+  .ring--2 .planet__inner {
+    animation-direction: normal;
+  }
+
+  .planet__name {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    translate: -50% 0;
+    white-space: nowrap;
+    font-size: 0.6rem;
+    text-transform: none;
+    color: var(--c-fg);
+    opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+  }
+
+  .planet:hover .planet__inner,
+  .planet.is-hl .planet__inner {
+    border-color: var(--c-wine-tint);
+    box-shadow: 0 0 22px var(--c-glow);
+    scale: 1.18;
+  }
+
+  .planet:hover .planet__name,
+  .planet.is-hl .planet__name {
+    opacity: 1;
+  }
+
+  .orbit.has-hl .planet:not(.is-hl) .planet__inner {
+    opacity: 0.35;
+  }
+
+  .orbit:hover .ring,
+  .orbit:hover .planet__inner,
+  .orbit.has-hl .ring,
+  .orbit.has-hl .planet__inner {
+    animation-play-state: paused;
+  }
+
+  .core {
+    position: absolute;
+    inset: 37%;
+    display: grid;
+    place-items: center;
+    padding: 5%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(139 46 74 / 0.45), rgb(109 33 60 / 0.12) 62%, transparent 72%);
+    box-shadow: inset 0 0 0 1px rgb(214 138 160 / 0.3);
+    transition: box-shadow 0.3s;
+  }
+
+  .core::before {
+    content: '';
+    position: absolute;
+    inset: -12%;
+    border-radius: 50%;
+    border: 1px solid rgb(214 138 160 / 0.25);
+    animation: breathe 4s var(--ease-in-out) infinite;
+  }
+
+  .core.is-hl {
+    box-shadow:
+      inset 0 0 0 1px var(--c-wine-tint),
+      0 0 40px var(--c-glow);
+  }
+
+  .core :global(.core__logo) {
+    width: 100%;
+    height: 100%;
+  }
+
+  @keyframes spin {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  @keyframes breathe {
+    50% {
+      transform: scale(1.08);
+      opacity: 0.4;
+    }
+  }
+
+  /* ---------- Lista por categoría ---------- */
+  .groups {
+    border-top: 1px solid var(--c-line-strong);
+  }
+
+  .group {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+    padding: 0.95rem 0;
+    border-bottom: 1px solid var(--c-line);
+  }
+
+  .group__label {
+    color: var(--c-fg-dim);
+    padding-top: 0.2rem;
+  }
+
+  .group__items {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.1rem;
+  }
+
+  .item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--c-fg-muted);
+    cursor: default;
+    transition: color 0.2s;
+  }
+
+  .item:hover,
+  .item.is-hl {
+    color: var(--c-white);
+  }
+
+  .item--main {
+    color: var(--c-fg);
+    font-weight: 500;
+  }
+
+  .item__tag {
+    padding: 0.05rem 0.4rem;
+    border: 1px solid rgb(214 138 160 / 0.4);
+    border-radius: 999px;
+    font-size: 0.6rem;
+    color: var(--c-wine-tint);
+    font-weight: 400;
+  }
+
+  /* ---------- Flujo de trabajo con IA ---------- */
+  .workflow {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-areas: 'head body' 'steps steps';
+    gap: 1.5rem clamp(2rem, 5vw, 4rem);
+    margin-top: 1rem;
+    padding: clamp(1.25rem, 3vw, 2rem);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, rgb(109 33 60 / 0.16), transparent 55%), rgb(23 23 26 / 0.5);
+  }
+
+  .workflow__head {
+    grid-area: head;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .workflow__head :global(.workflow__logo) {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border-radius: 10px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-line-strong);
+  }
+
+  .workflow__kicker {
+    color: var(--c-wine-tint);
+    margin-bottom: 0.35rem;
+  }
+
+  .workflow__title {
+    font-size: var(--fs-lg);
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+  }
+
+  .workflow__body {
+    grid-area: body;
+    color: var(--c-fg-muted);
+    font-size: var(--fs-sm);
+    line-height: 1.65;
+  }
+
+  .workflow__tags {
+    grid-area: steps;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--c-line);
+  }
+
+  .workflow__tags li {
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--c-line-strong);
+    color: var(--c-fg-muted);
+    text-transform: none;
+    letter-spacing: 0;
+    transition:
+      color 0.25s,
+      border-color 0.25s;
+  }
+
+  .workflow__tags li:hover {
+    color: var(--c-white);
+    border-color: rgb(214 138 160 / 0.5);
+  }
+
+  @media (max-width: 899px) {
+    .workflow {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: 'head' 'body' 'steps';
+    }
+
+  }
+
+  @media (max-width: 899px) {
+    .stack__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .orbit {
+      --planet: 38px;
+      /* deja lugar para que los planetas del anillo exterior no se corten */
+      width: min(calc(100% - var(--planet) - 0.5rem), 360px);
+    }
+
+    .planet__inner {
+      padding: 9px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .group {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ring,
+    .planet__inner,
+    .core::before {
+      animation: none;
+    }
+  }
+</style>

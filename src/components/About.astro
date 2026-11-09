@@ -1,0 +1,49 @@
+---
+import SectionHead from './SectionHead.astro';
+---
+
+<section id="sobre-mi" class="section about" data-field="waves" data-label="Sobre mí" aria-labelledby="sobre-mi-title">
+  <div class="container">
+    <SectionHead index={1} title="Sobre mí" id="sobre-mi-title" depth="-0.00" />
+
+    <div class="about__grid">
+      <p class="about__statement" data-reveal>
+        Lo que más disfruto es ver un sistema que funciona bien y además se ve bien. Ese es el equilibrio que busco en cada proyecto: que me convenza a mí y que le sirva al cliente.
+      </p>
+      <p class="about__note" data-reveal style="--d:1">
+        No hago código por hacer código: cada decisión tiene que tener un porqué. Y un sistema nunca está del todo terminado; siempre hay algo para optimizar o simplificar para quien lo usa.
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .about__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: end;
+    gap: 2rem 4rem;
+  }
+
+  .about__statement {
+    font-size: clamp(1.5rem, 1.05rem + 1.7vw, 2.4rem);
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.03em;
+    max-width: 32ch;
+    text-wrap: pretty;
+  }
+
+  .about__note {
+    padding-left: 1rem;
+    border-left: 1px solid var(--c-wine-2);
+    color: var(--c-fg-muted);
+    font-size: var(--fs-md);
+  }
+
+  @media (max-width: 899px) {
+    .about__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

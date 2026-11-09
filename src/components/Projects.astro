@@ -1,0 +1,35 @@
+---
+import SectionHead from './SectionHead.astro';
+import ProjectCard from './ProjectCard.astro';
+import { projects } from '../data/projects';
+---
+
+<section id="proyectos" class="section" data-field="grid" data-label="Proyectos" aria-labelledby="proyectos-title">
+  <div class="container">
+    <SectionHead index={3} title="Proyectos" id="proyectos-title" depth="-0.50" />
+
+    <div class="projects">
+      {projects.map((p, i) => <ProjectCard project={p} index={i + 1} />)}
+    </div>
+  </div>
+</section>
+
+<style>
+  .projects {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(1.25rem, 2vw, 1.75rem);
+  }
+
+  @media (max-width: 1199px) {
+    .projects {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 760px) {
+    .projects {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

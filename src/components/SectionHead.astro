@@ -1,0 +1,68 @@
+---
+/** Encabezado de sección en una línea: índice + título + regla + coordenada de profundidad. */
+interface Props {
+  index: number;
+  title: string;
+  id: string;
+  depth?: string;
+}
+
+const { index, title, id, depth } = Astro.props;
+---
+
+<header class="sh">
+  <span class="sh__idx mono" aria-hidden="true">[{String(index).padStart(2, '0')}]</span>
+  <h2 id={id} class="sh__title" data-scramble data-duration="700">{title}</h2>
+  <span class="sh__rule" aria-hidden="true" data-signal></span>
+  {depth && <span class="sh__z mono" aria-hidden="true">z {depth}</span>}
+</header>
+
+<style>
+  .sh {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+
+  .sh__idx {
+    color: var(--c-wine-tint);
+  }
+
+  .sh__title {
+    font-size: var(--fs-lg);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+
+  /* Sin JS: línea punteada. Con JS: señal ASCII que ondula (ver scripts/ascii-fx.ts). */
+  .sh__rule {
+    flex: 1;
+    min-width: 0;
+    align-self: center;
+    height: 1px;
+    background-image: linear-gradient(to right, var(--c-line-strong) 50%, transparent 50%);
+    background-size: 8px 1px;
+  }
+
+  .sh__rule:global(.is-live)::before {
+    content: attr(data-sig);
+  }
+
+  .sh__rule:global(.is-live) {
+    height: auto;
+    background: none;
+    overflow: hidden;
+    white-space: pre;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    line-height: 1;
+    color: rgb(214 138 160 / 0.45);
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+  }
+
+  .sh__z {
+    color: var(--c-fg-dim);
+  }
+</style>
