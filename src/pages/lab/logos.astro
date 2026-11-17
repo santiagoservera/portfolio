@@ -1,0 +1,61 @@
+---
+/* Laboratorio (no indexado): logos de tecnologías convertidos a ASCII con el kit de ascii.rest */
+const logos = import.meta.glob<string>('../../assets/tech/*.svg', { query: '?url', import: 'default', eager: true });
+const list = Object.entries(logos).map(([p, url]) => ({ id: p.split('/').pop()!.replace('.svg', ''), url }));
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <title>Lab · logos ASCII</title>
+    <style is:global>
+      body { background: #09090b; color: #f4f4f5; font-family: system-ui; margin: 0; padding: 24px; }
+      .grid { display: flex; flex-wrap: wrap; gap: 28px; }
+      figure { margin: 0; display: grid; gap: 8px; justify-items: start; }
+      figcaption { font: 12px monospace; color: #888; }
+      .row { display: flex; gap: 16px; align-items: center; }
+      img { width: 56px; height: 56px; }
+      pre { margin: 0; font: 12px/1.1 ui-monospace, Consolas, monospace; color: #d68aa0; }
+    </style>
+  </head>
+  <body>
+    <div class="grid" id="grid" data-list={JSON.stringify(list)}></div>
+    <script>
+      import { fromImage } from 'ascii.rest/kit';
+      const grid = document.getElementById('grid')!;
+      const list: { id: string; url: string }[] = JSON.parse(grid.dataset.list!);
+      const widths = (new URLSearchParams(location.search).get('w') ?? '20,28').split(',').map(Number);
+      const out: Record<string, Record<number, string[]>> = {};
+      (async () => {
+        for (const { id, url } of list) {
+          const svg = await (await fetch(url)).text();
+          const fig = document.createElement('figure');
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.innerHTML = `<img src="${url}" alt="">`;
+          out[id] = {};
+          for (const w of widths) {
+            try {
+              const p = await fromImage(svg, { width: w, height: Math.round(w / 2) + 2, style: 'logo', color: false });
+              const d = p.drawing;
+              out[id][w] = d.mono;
+              const pre = document.createElement('pre');
+              pre.textContent = d.mono.join('\n');
+              row.append(pre);
+            } catch (e) {
+              row.append(String(e));
+            }
+          }
+          fig.append(row);
+          const cap = document.createElement('figcaption');
+          cap.textContent = id;
+          fig.append(cap);
+          grid.append(fig);
+        }
+        (window as any).__logos = out;
+        document.body.dataset.done = '1';
+      })();
+    </script>
+  </body>
+</html>

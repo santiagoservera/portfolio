@@ -1,0 +1,134 @@
+---
+/**
+ * Pieza ASCII animada (ascii.rest, MIT © bas3line).
+ * - El dibujo es decorativo: se pinta con ::before (content: attr(data-frame)), así no cuenta
+ *   como texto del documento (lectores de pantalla, contraste, tamaño de letra legible).
+ * - El primer cuadro se renderiza en el servidor: se ve sin JavaScript y no mueve el layout.
+ * - Un bucle propio pide cada cuadro a la pieza (a su fps) solo mientras está en pantalla.
+ *   Con movimiento reducido queda en el primer cuadro. Un evento "ascii:stop" la detiene.
+ * - No usa el componente Astro de la librería, que descarga una fuente de su dominio.
+ * - `custom="terminal"` usa la terminal propia (src/lib/ascii-pieces/terminal.ts) con `options`.
+ */
+import { load, isPiece } from 'ascii.rest';
+import { terminal, type TerminalOptions } from '../lib/ascii-pieces/terminal';
+
+interface Props {
+  piece?: string;
+  custom?: 'terminal';
+  options?: Record<string, unknown>;
+  class?: string;
+}
+
+const { piece, custom, options = {}, class: className } = Astro.props;
+
+let first = '';
+if (custom === 'terminal') {
+  first = terminal(options as unknown as TerminalOptions)(0);
+} else if (piece && isPiece(piece)) {
+  // las piezas tienen tipos distintos entre sí; acá solo se usa la forma común
+  const mod = (await load[piece]()) as unknown as {
+    meta: { options?: Record<string, unknown> };
+    default: (o?: Record<string, unknown>) => (t: number, env?: { paper?: boolean }) => string;
+  };
+  first = mod.default({ ...(mod.meta.options ?? {}), ...options })(0, { paper: false });
+} else {
+  throw new Error(`AsciiPiece: no existe la pieza "${piece}"`);
+}
+---
+
+<div
+  class:list={['ascii-piece', className]}
+  aria-hidden="true"
+  data-frame={first}
+  data-ascii-piece={piece}
+  data-ascii-custom={custom}
+  data-ascii-options={Object.keys(options).length ? JSON.stringify(options) : undefined}
+>
+</div>
+
+<script>
+  import { load } from 'ascii.rest';
+  import { terminal } from '../lib/ascii-pieces/terminal';
+
+  type FrameFn = (t: number, env?: { paper?: boolean }) => string;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll<HTMLElement>('.ascii-piece').forEach((el) => {
+    if (reduced) return; // queda el primer cuadro, renderizado en el servidor
+    const options = el.dataset.asciiOptions ? JSON.parse(el.dataset.asciiOptions) : {};
+    let frame: FrameFn | null = null;
+    let fps = 20;
+    let raf = 0;
+    let running = false;
+    let stopped = false;
+    let t = 0;
+    let last = 0;
+    let acc = 0;
+
+    const prepare = async () => {
+      if (frame) return;
+      if (el.dataset.asciiCustom === 'terminal') {
+        frame = terminal(options);
+      } else {
+        const mod = (await load[el.dataset.asciiPiece as keyof typeof load]()) as unknown as {
+          meta: { fps?: number; options?: Record<string, unknown> };
+          default: (o?: Record<string, unknown>) => FrameFn;
+        };
+        fps = mod.meta.fps ?? 20;
+        frame = mod.default({ ...(mod.meta.options ?? {}), ...options });
+      }
+    };
+
+    const tick = (now: number) => {
+      if (!running) return;
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      t += dt;
+      acc += dt;
+      if (acc >= 1 / fps && frame) {
+        acc = 0;
+        el.dataset.frame = frame(t, { paper: false });
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    const play = async () => {
+      if (running || stopped || document.hidden) return;
+      await prepare();
+      if (stopped) return;
+      running = true;
+      last = performance.now();
+      raf = requestAnimationFrame(tick);
+    };
+    const pause = () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+
+    let visible = false;
+    new IntersectionObserver(([e]) => {
+      visible = e.isIntersecting;
+      visible ? play() : pause();
+    }, { rootMargin: '100px 0px' }).observe(el);
+    document.addEventListener('visibilitychange', () => (document.hidden ? pause() : visible && play()));
+    el.addEventListener('ascii:stop', () => {
+      stopped = true;
+      pause();
+    });
+  });
+</script>
+
+<style>
+  .ascii-piece {
+    font-family: var(--f-mono);
+    line-height: 1.12;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  .ascii-piece::before {
+    content: attr(data-frame);
+    display: block;
+    white-space: pre;
+  }
+</style>

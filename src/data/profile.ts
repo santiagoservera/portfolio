@@ -21,5 +21,6 @@ export const nav = [
   { id: 'experiencia', label: 'Experiencia' },
   { id: 'proyectos', label: 'Proyectos' },
   { id: 'tecnologias', label: 'Tecnologías' },
+  { id: 'ia', label: 'IA' },
   { id: 'contacto', label: 'Contacto' },
 ] as const;

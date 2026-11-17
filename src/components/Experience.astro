@@ -1,31 +1,27 @@
 ---
 import SectionHead from './SectionHead.astro';
 import { experience } from '../data/experience';
+import AsciiPiece from './AsciiPiece.astro';
 
-// Línea de tiempo 3D de la figura viajera, construida con las fechas reales.
-const toMonths = (iso: string) => {
-  const [y, m] = iso.split('-').map(Number);
-  return y * 12 + (m - 1);
-};
-const now = new Date();
-const nowM = now.getFullYear() * 12 + now.getMonth();
-const minM = Math.min(...experience.map((r) => toMonths(r.startISO)));
-const span = Math.max(1, nowM - minM);
-const roles = experience.map((r) => ({
-  s: (toMonths(r.startISO) - minM) / span,
-  e: ((r.current || !r.endISO ? nowM : toMonths(r.endISO)) - minM) / span,
-  current: r.current,
-}));
+// La trayectoria contada como una sesión de terminal (mismos datos que la lista).
+const session = [
+  ['whoami', 0.1, ['santiago servera · full stack developer']],
+  ['git log --oneline --reverse', 0.25, ['a1f3c2e 2024-01 SUINFI · frontend (angular, react)', 0.35, 'b7d91e0 2024-09 freelance · full stack', 0.35, 'c02e8a4 2025-04 Tandem Digital · full stack (vue, node)']],
+  ['git status', 0.2, ['On branch main', 'en curso: Tandem Digital + freelance', 'nothing to commit, working tree clean']],
+  ['clear', 0, null],
+];
+
 ---
 
-<section id="experiencia" class="section" data-field="streams" data-label="Experiencia" aria-labelledby="experiencia-title">
+<section id="experiencia" class="section exp" data-label="Experiencia" aria-labelledby="experiencia-title">
   <div class="container">
     <SectionHead index={2} title="Experiencia" id="experiencia-title" depth="-0.25" />
 
+    <div class="exp__layout">
     <ol class="jobs">
       {
         experience.map((r, i) => (
-          <li class="job" data-field-react="band" data-reveal style={`--d:${i}`}>
+          <li class="job" data-reveal style={`--d:${i}`}>
             <span class="job__when mono">
               <time datetime={r.startISO}>{r.start}</time> — {r.end}
             </span>
@@ -44,10 +40,44 @@ const roles = experience.map((r) => ({
         ))
       }
     </ol>
+
+    <!-- La misma trayectoria, contada como una sesión de terminal (solo escritorio) -->
+    <div class="exp__term bg-art" aria-hidden="true">
+      <AsciiPiece custom="terminal" options={{ prompt: '~/santiago $', title: '~/santiago', session, rows: 14 }} />
+    </div>
+    </div>
   </div>
 </section>
 
 <style>
+  /* La terminal va detrás de la lista: misma historia, como textura de fondo */
+  .exp__layout {
+    position: relative;
+  }
+
+  /* en el margen derecho: arranca donde termina el texto y se pierde hacia el borde de la pantalla */
+  .exp__term {
+    left: calc(100% - 5.5rem);
+    top: 50%;
+    translate: 0 -50%;
+    --bg-art-opacity: 0.4;
+    -webkit-mask-image: linear-gradient(to right, #000 25%, transparent 85%);
+    mask-image: linear-gradient(to right, #000 25%, transparent 85%);
+  }
+
+  .exp__term :global(.ascii-piece) {
+    font-size: 12px;
+    zoom: 1;
+  }
+
+  /* Tablet y celular: sin márgenes laterales, la lista ocupa todo el ancho y la terminal
+     quedaría encima del texto: no se muestra */
+  @media (max-width: 1099px) {
+    .exp__term {
+      display: none;
+    }
+  }
+
   .jobs {
     border-top: 1px solid var(--c-line-strong);
   }
@@ -102,10 +132,7 @@ const roles = experience.map((r) => ({
       grid-template-columns: 10rem minmax(0, 1fr);
     }
 
-    .job__role {
-      grid-column: 2;
-    }
-
+    .job__role,
     .job__summary {
       grid-column: 2;
     }

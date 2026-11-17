@@ -41,6 +41,11 @@
   --radius: 14px;
   --radius-sm: 8px;
 
+  /* Grilla de secciones: texto 7 / pieza visual 5, alternando de lado en zigzag */
+  --split-text: minmax(0, 7fr);
+  --split-art: minmax(0, 5fr);
+  --split-gap: clamp(2rem, 5vw, 4.5rem);
+
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 
@@ -191,9 +196,6 @@ p {
   position: relative;
   padding-block: var(--section-y);
   overflow-x: clip;
-  /* fuera de pantalla, el navegador omite su layout y pintado hasta que se acerca */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 900px;
 }
 
 
@@ -309,3 +311,23 @@ html.js [data-reveal].is-in {
     transform: none;
   }
 }
+
+/* Animaciones de secciones fuera de pantalla: en pausa (ver mountOffscreenPause) */
+.anim-paused,
+.anim-paused *,
+.anim-paused *::before,
+.anim-paused *::after {
+  animation-play-state: paused !important;
+}
+
+/* ---------- Piezas ASCII como fondo de sección (detrás del contenido, sin ocupar lugar) ---------- */
+.bg-art {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  color: var(--c-wine-tint);
+  opacity: var(--bg-art-opacity, 0.16);
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 35%, transparent 100%);
+}
+

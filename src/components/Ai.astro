@@ -1,0 +1,721 @@
+---
+import SectionHead from './SectionHead.astro';
+import TechLogo from './TechLogo.astro';
+import { aiIntro, principles, lanes, demoTask, demoReview, demoVerdict } from '../data/ai';
+---
+
+<section id="ia" class="section ai" data-label="IA" aria-labelledby="ia-title">
+  <div class="container">
+    <SectionHead index={5} title="IA" id="ia-title" depth="-0.90" />
+
+    <!-- 05.1 · Flujo de trabajo. Más adelante: cursos, proyectos con IA (05.2, 05.3…) -->
+    <div class="ai__intro">
+      <div>
+        <p class="ai__sub mono"><span>05.1</span> Flujo de trabajo</p>
+        <h3 class="ai__title">{aiIntro.title} <em>{aiIntro.titleEm}</em></h3>
+      </div>
+      <p class="ai__lede">{aiIntro.lede}</p>
+    </div>
+
+    <!-- Consola: un orquestador reparte una tarea entre agentes que trabajan en paralelo; después reviso e integro.
+         Sin JS o con movimiento reducido se ve el estado final. -->
+    <div class="console" data-console>
+      <div class="console__bar mono">
+        <span class="console__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <TechLogo id="claude" class="console__logo" />
+        <span class="console__name">orquestación de agentes</span>
+        <span class="console__badge">simulación</span>
+        <button type="button" class="console__replay" data-console-replay>
+          <span aria-hidden="true">↻</span> Repetir
+        </button>
+      </div>
+
+      <div
+        class="console__body mono"
+        role="img"
+        aria-label="Simulación: un orquestador divide una tarea entre cuatro agentes (plan, interfaz, backend y pruebas) que trabajan en paralelo; después la revisión y mi aprobación integran el cambio."
+      >
+        <div aria-hidden="true">
+          <p class="line line--prompt">
+            <span class="ps">~/proyecto $</span>
+            <span class="typed" data-typed><span class="typed__ghost">{demoTask}</span><span class="typed__live"></span></span>
+          </p>
+
+          <p class="line line--orch" data-step="orch">
+            <span class="glyph">◆</span> orquestador <span class="muted">divide la tarea en {lanes.length} agentes</span>
+          </p>
+
+          <div class="lanes">
+            {
+              lanes.map((l) => (
+                <article class="lane" data-lane>
+                  <header class="lane__head">
+                    <span class="lane__id">{l.id}</span>
+                    <span class="lane__state" data-state>
+                      listo
+                    </span>
+                  </header>
+                  <p class="lane__role">{l.role}</p>
+                  <ol class="lane__log">
+                    {l.log.map((entry, i) => (
+                      <li class:list={{ 'is-last': i === l.log.length - 1 }}>{entry}</li>
+                    ))}
+                  </ol>
+                  <div class="lane__meta">
+                    <span class="lane__bar">
+                      <i />
+                    </span>
+                    <span class="lane__ctx">
+                      ctx <b data-ctx={l.ctx}>{l.ctx}</b>%
+                    </span>
+                  </div>
+                </article>
+              ))
+            }
+          </div>
+
+          <p class="line line--review" data-step="review">
+            <span><span class="glyph">◇</span> revisión</span>
+            <span class="typed" data-typed><span class="typed__ghost">{demoReview}</span><span class="typed__live"></span></span>
+          </p>
+
+          <p class="line line--verdict" data-step="verdict">
+            <span class="glyph">✓</span> {demoVerdict}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <ol class="principles">
+      {
+        principles.map((p, i) => (
+          <li class="principle" data-reveal style={`--d:${i}`}>
+            <span class="principle__idx mono">{String(i + 1).padStart(2, '0')}</span>
+            <h4 class="principle__title">{p.title}</h4>
+            <p class="principle__body">{p.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<script>
+  // Corre una vez al entrar en pantalla (~6 s) y se puede repetir. Todo está renderizado de antemano:
+  // la animación solo cambia opacidades, textos de ancho reservado y barras, así que nada se mueve.
+  const root = document.querySelector<HTMLElement>('[data-console]');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (root && !reduce) {
+    const q = <T extends Element = HTMLElement>(s: string) => [...root.querySelectorAll<T & HTMLElement>(s)];
+    const step = (k: string) => root.querySelector<HTMLElement>(`[data-step="${k}"]`)!;
+    const [promptTyped, reviewTyped] = q('[data-typed]');
+    const laneEls = q('[data-lane]');
+    let run = 0;
+
+    const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    const type = async (el: HTMLElement, id: number, speed: number) => {
+      const full = el.querySelector('.typed__ghost')!.textContent ?? '';
+      const live = el.querySelector<HTMLElement>('.typed__live')!;
+      // de a dos caracteres: se lee como tipeo y no demora
+      for (let i = 2; i < full.length + 2; i += 2) {
+        if (id !== run) return;
+        live.textContent = full.slice(0, i);
+        await wait(speed);
+      }
+    };
+
+    const reset = () => {
+      root.classList.add('is-armed');
+      root.classList.remove('is-done');
+      q('[data-step]').forEach((el) => el.classList.remove('on'));
+      q('.typed__live').forEach((el) => (el.textContent = ''));
+      laneEls.forEach((lane) => {
+        lane.dataset.status = 'queued';
+        lane.querySelector<HTMLElement>('[data-state]')!.textContent = 'en cola';
+        lane.querySelectorAll('li').forEach((li) => li.classList.remove('on'));
+        lane.style.setProperty('--p', '0');
+        const ctx = lane.querySelector<HTMLElement>('[data-ctx]')!;
+        ctx.textContent = '0';
+      });
+    };
+
+    // Cada agente trabaja a su ritmo: las tres líneas del log, la barra y el contexto suben juntos.
+    const work = async (lane: HTMLElement, id: number, delay: number) => {
+      await wait(delay);
+      if (id !== run) return;
+      const state = lane.querySelector<HTMLElement>('[data-state]')!;
+      const ctx = lane.querySelector<HTMLElement>('[data-ctx]')!;
+      const target = Number(ctx.dataset.ctx);
+      const items = [...lane.querySelectorAll('li')];
+      lane.dataset.status = 'working';
+      state.textContent = 'trabajando';
+      for (let i = 0; i < items.length; i++) {
+        await wait(380 + Math.random() * 520);
+        if (id !== run) return;
+        items[i].classList.add('on');
+        const p = (i + 1) / items.length;
+        lane.style.setProperty('--p', String(p));
+        ctx.textContent = String(Math.round(target * p));
+      }
+      lane.dataset.status = 'done';
+      state.textContent = 'listo';
+    };
+
+    const play = async () => {
+      const id = ++run;
+      reset();
+      await wait(250);
+      await type(promptTyped, id, 16);
+      if (id !== run) return;
+      await wait(200);
+      step('orch').classList.add('on');
+      root.classList.add('is-split');
+      await wait(350);
+      await Promise.all(laneEls.map((lane, i) => work(lane, id, i * 140)));
+      if (id !== run) return;
+      await wait(250);
+      step('review').classList.add('on');
+      await type(reviewTyped, id, 14);
+      if (id !== run) return;
+      await wait(300);
+      step('verdict').classList.add('on');
+      root.classList.add('is-done');
+    };
+
+    reset();
+    new IntersectionObserver(
+      (entries, io) => {
+        if (!entries[0].isIntersecting) return;
+        io.disconnect();
+        play();
+      },
+      { threshold: 0.4 },
+    ).observe(root);
+
+    root.querySelector('[data-console-replay]')?.addEventListener('click', () => play());
+  }
+</script>
+
+<style>
+  /* ---------- Intro ---------- */
+  .ai__intro {
+    display: grid;
+    grid-template-columns: var(--split-art) var(--split-text);
+    align-items: end;
+    gap: 1.5rem var(--split-gap);
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+
+  .ai__sub {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    color: var(--c-fg-dim);
+  }
+
+  .ai__sub span {
+    color: var(--c-wine-tint);
+  }
+
+  .ai__title {
+    font-size: clamp(2rem, 1.2rem + 3vw, 3.6rem);
+    letter-spacing: -0.045em;
+    line-height: 1;
+  }
+
+  .ai__title em {
+    display: block;
+    font-family: var(--f-serif);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--c-wine-tint);
+  }
+
+  .ai__lede {
+    max-width: 62ch;
+    color: var(--c-fg-muted);
+    font-size: var(--fs-md);
+    line-height: 1.6;
+  }
+
+  /* ---------- Consola ---------- */
+  .console {
+    position: relative;
+    border: 1px solid var(--c-line-strong);
+    border-radius: var(--radius);
+    background:
+      radial-gradient(ellipse 60% 80% at 50% 0%, rgb(109 33 60 / 0.22), transparent 70%),
+      rgb(14 14 17 / 0.85);
+    box-shadow:
+      0 0 0 1px rgb(214 138 160 / 0.06),
+      0 30px 80px -40px rgb(109 33 60 / 0.6);
+    overflow: hidden;
+  }
+
+  /* líneas de escaneo muy suaves */
+  .console::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 3px);
+  }
+
+  .console__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--c-line);
+    color: var(--c-fg-dim);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .console__dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .console__dots i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1px solid var(--c-line-strong);
+  }
+
+  .console__bar :global(.console__logo) {
+    width: 16px;
+    height: 16px;
+  }
+
+  .console__name {
+    color: var(--c-fg-muted);
+  }
+
+  .console__badge {
+    padding: 0.05rem 0.5rem;
+    border: 1px solid rgb(214 138 160 / 0.35);
+    border-radius: 999px;
+    color: var(--c-wine-tint);
+    font-size: 0.68rem;
+  }
+
+  .console__replay {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 32px;
+    padding: 0.2rem 0.75rem;
+    border: 1px solid var(--c-line-strong);
+    border-radius: 999px;
+    color: var(--c-fg-muted);
+    font: inherit;
+    transition:
+      color 0.25s,
+      border-color 0.25s;
+  }
+
+  .console__replay:hover {
+    color: var(--c-white);
+    border-color: var(--c-wine-2);
+  }
+
+  .console__body {
+    padding: clamp(1rem, 2.5vw, 1.75rem);
+    font-size: 0.8rem;
+    line-height: 1.6;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--c-fg-muted);
+  }
+
+  .line {
+    margin: 0;
+  }
+
+  .line + .line,
+  .lanes + .line {
+    margin-top: 0.85rem;
+  }
+
+  .ps {
+    color: var(--c-wine-tint);
+    margin-right: 0.5rem;
+  }
+
+  .glyph {
+    color: var(--c-wine-tint);
+    margin-right: 0.35rem;
+  }
+
+  .muted {
+    color: var(--c-fg-dim);
+  }
+
+  .line--prompt {
+    color: var(--c-white);
+  }
+
+  /* El texto completo, invisible, reserva el lugar; encima (misma celda) se escribe la versión parcial. */
+  .line--prompt,
+  .line--review {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 0.6rem;
+  }
+
+  .line--prompt .ps {
+    margin-right: 0;
+  }
+
+  .typed {
+    display: grid;
+  }
+
+  .typed__ghost,
+  .typed__live {
+    grid-area: 1 / 1;
+  }
+
+  .console.is-armed .typed__ghost {
+    visibility: hidden;
+  }
+
+  /* ---------- Agentes ---------- */
+  .lanes {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.4rem;
+    padding-top: 1.1rem;
+  }
+
+  /* el bus del orquestador: una línea horizontal que reparte a cada agente */
+  .lanes::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 12.5%;
+    right: 12.5%;
+    height: 1px;
+    background: linear-gradient(to right, var(--c-wine-2), var(--c-wine-tint), var(--c-wine-2));
+    transform-origin: center;
+    transition: transform 0.5s var(--ease-out);
+  }
+
+  .lane {
+    position: relative;
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.85rem;
+    border: 1px solid var(--c-line);
+    border-radius: 10px;
+    background: rgb(23 23 26 / 0.7);
+    transition:
+      border-color 0.35s,
+      box-shadow 0.35s,
+      opacity 0.35s;
+  }
+
+  /* bajada del bus hasta cada agente, con un pulso que viaja mientras trabaja */
+  .lane::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    width: 1px;
+    height: 1.1rem;
+    background: linear-gradient(to bottom, var(--c-wine-tint), var(--c-wine-2));
+  }
+
+  .lane__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .lane__id {
+    color: var(--c-white);
+    font-weight: 500;
+  }
+
+  .lane__id::before {
+    content: 'agente:';
+    color: var(--c-fg-dim);
+  }
+
+  .lane__state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--c-fg-muted);
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .lane__state::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--c-white);
+  }
+
+  .lane__role {
+    margin: 0;
+    color: var(--c-fg-dim);
+    font-size: 0.72rem;
+  }
+
+  .lane__log {
+    display: grid;
+    gap: 0.15rem;
+    min-height: calc(3 * 1.6em);
+  }
+
+  .lane__log li {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--c-fg-muted);
+    transition: opacity 0.3s;
+  }
+
+  .lane__log li::before {
+    content: '› ';
+    color: var(--c-fg-dim);
+  }
+
+  .lane__log li.is-last {
+    color: var(--c-white);
+  }
+
+  .lane__log li.is-last::after {
+    content: ' ✓';
+    color: var(--c-wine-tint);
+  }
+
+  .lane__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.7rem;
+    color: var(--c-fg-dim);
+  }
+
+  .lane__bar {
+    flex: 1;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--c-line);
+    overflow: hidden;
+  }
+
+  .lane__bar i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(to right, var(--c-wine), var(--c-wine-tint));
+    transform-origin: left;
+    transform: scaleX(var(--p, 1));
+    transition: transform 0.45s var(--ease-out);
+  }
+
+  .lane__ctx b {
+    color: var(--c-fg-muted);
+    font-weight: 400;
+  }
+
+  .line--review {
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--c-line);
+  }
+
+  .line--verdict {
+    color: var(--c-white);
+  }
+
+  .line--verdict .glyph {
+    color: var(--c-white);
+  }
+
+  .console.is-done {
+    border-color: rgb(214 138 160 / 0.4);
+  }
+
+  /* ---------- Estados de la animación (solo con JS) ---------- */
+  .console.is-armed [data-step] {
+    opacity: 0;
+    transition: opacity 0.35s var(--ease-out);
+  }
+
+  .console.is-armed [data-step].on {
+    opacity: 1;
+  }
+
+  .console.is-armed .lanes::before {
+    transform: scaleX(0);
+  }
+
+  .console.is-armed.is-split .lanes::before {
+    transform: scaleX(1);
+  }
+
+  .console.is-armed .lane[data-status='queued'] {
+    opacity: 0.35;
+  }
+
+  .console.is-armed .lane[data-status='queued']::before {
+    opacity: 0;
+  }
+
+  .console.is-armed .lane[data-status='working'] {
+    border-color: rgb(214 138 160 / 0.45);
+    box-shadow: 0 0 24px -8px var(--c-glow);
+  }
+
+  .console.is-armed .lane[data-status='working']::before {
+    background: linear-gradient(to bottom, transparent, var(--c-white) 50%, transparent) 0 0 / 100% 200%;
+    animation: pulse-down 0.8s linear infinite;
+  }
+
+  .console.is-armed .lane[data-status='working'] .lane__state::before {
+    background: var(--c-wine-tint);
+    animation: blink 0.8s steps(2) infinite;
+  }
+
+  .console.is-armed .lane[data-status='queued'] .lane__state::before {
+    background: var(--c-fg-dim);
+  }
+
+  .console.is-armed .lane__log li {
+    opacity: 0;
+  }
+
+  .console.is-armed .lane__log li.on {
+    opacity: 1;
+  }
+
+  @keyframes pulse-down {
+    from {
+      background-position: 0 100%;
+    }
+    to {
+      background-position: 0 -100%;
+    }
+  }
+
+  @keyframes blink {
+    50% {
+      opacity: 0.2;
+    }
+  }
+
+  /* ---------- Principios ---------- */
+  .principles {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.5rem clamp(1.25rem, 2.5vw, 2rem);
+    margin-top: clamp(2rem, 4vw, 3rem);
+  }
+
+  .principle {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--c-line-strong);
+  }
+
+  .principle__idx {
+    color: var(--c-wine-tint);
+  }
+
+  .principle__title {
+    font-size: var(--fs-md);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+
+  .principle__body {
+    color: var(--c-fg-muted);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+  }
+
+  @media (max-width: 999px) {
+    .lanes {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .lanes::before {
+      left: 25%;
+      right: 25%;
+    }
+
+    /* en dos filas, la segunda fila no cuelga del bus */
+    .lane:nth-child(n + 3)::before {
+      display: none;
+    }
+
+    .principles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 899px) {
+    .ai__intro {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 560px) {
+    .console__name {
+      display: none;
+    }
+
+    .lanes {
+      gap: 0.5rem;
+    }
+
+    .lane {
+      padding: 0.7rem;
+    }
+
+    .lane__id::before {
+      content: '';
+    }
+
+    /* angosto: sin el rol, y el log envuelve en vez de cortarse con "…" */
+    .lane__role {
+      display: none;
+    }
+
+    .lane__log {
+      gap: 0.35rem;
+      min-height: 0;
+    }
+
+    .lane__log li {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
+
+    .principles {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lane::before {
+      animation: none;
+    }
+  }
+</style>

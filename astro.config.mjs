@@ -7,7 +7,8 @@ const site = process.env.SITE_URL ?? 'https://santiagoservera.com';
 
 export default defineConfig({
   site,
-  integrations: [sitemap()],
+  // /lab: pruebas visuales aisladas, fuera del sitemap
+  integrations: [sitemap({ filter: (page) => !page.includes('/lab/') })],
   // CSS en línea: elimina las hojas de estilo que bloquean el primer render.
   build: { inlineStylesheets: 'always' },
   prefetch: false,

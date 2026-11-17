@@ -7,33 +7,37 @@ import { asciiSignal } from '../lib/ascii';
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Corre `frame` a ~fps mientras `el` está visible. */
-function whileVisible(el: HTMLElement, fps: number, frame: (t: number) => void) {
-  const interval = 1000 / fps;
-  let raf = 0;
-  let last = 0;
-  let running = false;
-  const start = performance.now();
-
-  const tick = (now: number) => {
-    if (!running) return;
-    if (now - last >= interval) {
-      last = now;
-      frame((now - start) / 1000);
-    }
-    raf = requestAnimationFrame(tick);
-  };
-
+/** Un solo temporizador compartido: cada elemento visible se dibuja a ~fps, sin un bucle rAF propio. */
+const jobs = new Set<{ frame: (t: number) => void }>();
+const t0 = performance.now();
+let timer = 0;
+function schedule() {
+  if (timer || !jobs.size) return;
+  timer = window.setInterval(() => {
+    if (document.hidden) return;
+    const t = (performance.now() - t0) / 1000;
+    jobs.forEach((j) => j.frame(t));
+  }, 1000 / 12);
+}
+function unschedule() {
+  if (!jobs.size) {
+    window.clearInterval(timer);
+    timer = 0;
+  }
+}
+function whileVisible(el: HTMLElement, _fps: number, frame: (t: number) => void) {
+  const job = { frame };
   new IntersectionObserver(([e]) => {
-    if (e.isIntersecting && !running && !document.hidden) {
-      running = true;
-      raf = requestAnimationFrame(tick);
-    } else if (!e.isIntersecting) {
-      running = false;
-      cancelAnimationFrame(raf);
+    if (e.isIntersecting) {
+      jobs.add(job);
+      schedule();
+    } else {
+      jobs.delete(job);
+      unschedule();
     }
   }).observe(el);
 }
+
 
 /* ---------- Señales: líneas que ondulan ---------- */
 function charWidth(el: HTMLElement): number {

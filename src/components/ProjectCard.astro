@@ -15,6 +15,13 @@ const noise = asciiNoise(project.slug, 48, 18);
 ---
 
 <article class="card" data-reveal style={`--d:${index - 1}`} aria-labelledby={`p-${project.slug}`}>
+  <div class="card__head">
+    <span class="card__meta mono">
+      <span class="card__idx" aria-hidden="true">{String(index).padStart(2, '0')}</span>
+      <span class="card__kind">{project.kind}</span>
+    </span>
+    <h3 id={`p-${project.slug}`} class="card__title">{project.name}</h3>
+  </div>
   <a
     href={project.url}
     class="card__media"
@@ -52,13 +59,6 @@ const noise = asciiNoise(project.slug, 48, 18);
   </a>
 
   <div class="card__body">
-    <div class="card__head">
-      <span class="card__meta mono">
-        <span class="card__idx" aria-hidden="true">{String(index).padStart(2, '0')}</span>
-        <span class="card__kind">{project.kind}</span>
-      </span>
-      <h3 id={`p-${project.slug}`} class="card__title">{project.name}</h3>
-    </div>
     <p class="card__summary">{project.summary}</p>
     <a href={project.url} class="card__link mono" target="_blank" rel="noopener noreferrer">
       {project.domain}

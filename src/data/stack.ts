@@ -81,10 +81,3 @@ export const stackGroups: TechGroup[] = [
     items: [{ id: 'claude', name: 'Claude Code' }],
   },
 ];
-
-/** Cómo trabajo con IA. */
-export const workflow = {
-  title: 'Aprendiendo a trabajar mejor con IA',
-  body: 'Me gusta seguir aprendiendo cómo sumar la IA a mi forma de trabajar. Hoy uso Claude Code con un enfoque de Spec-Driven Development, y voy probando y adaptando nuevas formas de ordenar los proyectos y ser más eficiente, sin perder el criterio propio.',
-  tags: ['Claude Code', 'Spec-Driven Development', 'Orden', 'Eficiencia'],
-};

@@ -10,11 +10,11 @@ const torus = renderTorus(70, 32, 0.9, 0.4);
 const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
 ---
 
-<section id="contacto" class="section contact" data-field="loop" data-label="Contacto" aria-labelledby="contacto-title">
+<section id="contacto" class="section contact" data-label="Contacto" aria-labelledby="contacto-title">
   <div class="container contact__grid">
     <div class="contact__main">
       <div class="coord mono" aria-hidden="true">
-        <span class="coord__idx">[05]</span>
+        <span class="coord__idx">[06]</span>
         <span>Contacto</span>
         <span class="coord__z">z -1.00 · cierre del loop</span>
       </div>
@@ -28,7 +28,7 @@ const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
       </p>
 
       <div class="mail" data-reveal>
-        <a href={`mailto:${profile.email}`} class="mail__link" data-field-react="flow">
+        <a href={`mailto:${profile.email}`} class="mail__link" data-loop-boost>
           <Icon name="mail" class="mail__icon" />
           <span data-copy-text>{profile.email}</span>
         </a>
@@ -41,7 +41,7 @@ const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
 
       <ul class="channels" data-reveal style="--d:1">
         <li>
-          <a href={profile.links.github} class="channel" data-field-react="flow" target="_blank" rel="noopener noreferrer">
+          <a href={profile.links.github} class="channel" data-loop-boost target="_blank" rel="noopener noreferrer">
             <Icon name="github" />
             <span class="channel__name">GitHub</span>
             <span class="channel__handle mono">/santiagoservera</span>
@@ -50,7 +50,7 @@ const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
           </a>
         </li>
         <li>
-          <a href={profile.links.linkedin} class="channel" data-field-react="flow" target="_blank" rel="noopener noreferrer">
+          <a href={profile.links.linkedin} class="channel" data-loop-boost target="_blank" rel="noopener noreferrer">
             <Icon name="linkedin" />
             <span class="channel__name">LinkedIn</span>
             <span class="channel__handle mono">/in/santiago-servera</span>
@@ -61,7 +61,7 @@ const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
         <li>
           {
             hasCv ? (
-              <a href={profile.cvPath} class="channel" data-field-react="flow" download>
+              <a href={profile.cvPath} class="channel" data-loop-boost download>
                 <Icon name="download" />
                 <span class="channel__name">Currículum</span>
                 <span class="channel__handle mono">PDF</span>
@@ -79,7 +79,7 @@ const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
       </ul>
     </div>
 
-    <div class="contact__art" aria-hidden="true" data-field-center>
+    <div class="contact__art" aria-hidden="true">
       <pre class="torus" data-torus data-cols="70" data-rows="32">{torus}</pre>
     </div>
   </div>
@@ -90,7 +90,7 @@ const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
   const el = document.querySelector<HTMLElement>('[data-torus]');
   // los enlaces de contacto aceleran el loop
   let boost = 0;
-  document.querySelectorAll('[data-field-react="flow"]').forEach((a) => {
+  document.querySelectorAll('[data-loop-boost]').forEach((a) => {
     a.addEventListener('pointerenter', () => (boost = 1));
     a.addEventListener('pointerleave', () => (boost = 0));
   });
@@ -105,9 +105,9 @@ const hasCv = existsSync(join(process.cwd(), 'public', profile.cvPath));
 
   .contact__grid {
     display: grid;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    grid-template-columns: var(--split-text) var(--split-art);
     align-items: center;
-    gap: 2rem;
+    gap: 2rem var(--split-gap);
   }
 
   .contact__main {

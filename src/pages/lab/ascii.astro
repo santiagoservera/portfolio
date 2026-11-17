@@ -1,0 +1,481 @@
+---
+/**
+ * Laboratorio: una geometría 3D que alterna entre wireframe y ASCII manteniendo forma,
+ * profundidad y movimiento. Prueba aislada (no enlazada, noindex, fuera del sitemap).
+ *
+ * Una sola geometría y una sola proyección alimentan las dos representaciones:
+ * - Wireframe: líneas de la malla con atenuación por profundidad.
+ * - ASCII: la superficie se muestrea con z-buffer por celda y se ilumina con sus normales.
+ * Un plano de corte en pantalla separa ambas; su posición es la "mezcla".
+ */
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+---
+
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Laboratorio · ASCII ⇄ Wireframe</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <canvas id="stage" aria-label="Geometría 3D que alterna entre wireframe y ASCII"></canvas>
+
+    <header class="tag">
+      <p class="tag__kicker">Laboratorio · prueba aislada</p>
+      <h1 class="tag__title">ASCII <span>⇄</span> Wireframe</h1>
+    </header>
+
+    <form class="panel" aria-label="Controles">
+      <label class="row">
+        <span>Forma</span>
+        <select id="shape">
+          <option value="knot">Nudo</option>
+          <option value="torus">Toroide</option>
+          <option value="sphere">Esfera</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>Glifos</span>
+        <select id="glyphs">
+          <option value="fine">Fino</option>
+          <option value="dots">Puntos</option>
+          <option value="classic">Clásico</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>Densidad <output id="o-density"></output></span>
+        <input id="density" type="range" min="7" max="22" step="1" value="11" />
+      </label>
+      <label class="row">
+        <span>Contraste <output id="o-contrast"></output></span>
+        <input id="contrast" type="range" min="0.5" max="2.5" step="0.05" value="1.5" />
+      </label>
+      <label class="row">
+        <span>Velocidad <output id="o-speed"></output></span>
+        <input id="speed" type="range" min="0" max="2" step="0.05" value="0.6" />
+      </label>
+      <label class="row">
+        <span>Mezcla <output id="o-mix"></output></span>
+        <input id="mix" type="range" min="0" max="1" step="0.01" value="0.5" />
+      </label>
+      <label class="check">
+        <input id="auto" type="checkbox" checked />
+        <span>Transición automática</span>
+      </label>
+      <p class="fps" id="fps" aria-live="off"></p>
+    </form>
+
+    <script>
+      const canvas = document.getElementById('stage') as HTMLCanvasElement;
+      const ctx = canvas.getContext('2d')!;
+      const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+      const ui = {
+        shape: $<HTMLSelectElement>('shape'),
+        glyphs: $<HTMLSelectElement>('glyphs'),
+        density: $<HTMLInputElement>('density'),
+        contrast: $<HTMLInputElement>('contrast'),
+        speed: $<HTMLInputElement>('speed'),
+        mix: $<HTMLInputElement>('mix'),
+        auto: $<HTMLInputElement>('auto'),
+        fps: $<HTMLElement>('fps'),
+      };
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced) {
+        ui.speed.value = '0';
+        ui.auto.checked = false;
+      }
+
+      const TAU = Math.PI * 2;
+      const GLYPHS: Record<string, string> = {
+        fine: ' .·:-=+*',
+        dots: ' ·∙•●',
+        classic: '.,-~:;=!*#$@',
+      };
+      // paleta: bordó profundo → bordó → rosado → blanco suave
+      const PAL = [
+        [70, 20, 38],
+        [109, 33, 60],
+        [139, 46, 74],
+        [214, 138, 160],
+        [244, 244, 245],
+      ];
+      const BANDS = 8;
+      const bandColor = (b: number) => {
+        const t = (b / (BANDS - 1)) * (PAL.length - 1);
+        const i = Math.min(PAL.length - 2, Math.floor(t)), f = t - i;
+        const c = PAL[i].map((v, k) => Math.round(v + (PAL[i + 1][k] - v) * f));
+        return `rgb(${c[0]},${c[1]},${c[2]})`;
+      };
+      const BAND_COLORS = Array.from({ length: BANDS }, (_, b) => bandColor(b));
+
+      /* ---------- Geometría paramétrica ---------- */
+      type Geo = { nu: number; nv: number; p: Float32Array; n: Float32Array; ringStep: number; lineStep: number };
+      function build(kind: string): Geo {
+        const nu = kind === 'knot' ? 520 : 360, nv = kind === 'knot' ? 64 : kind === 'torus' ? 120 : 170;
+        const p = new Float32Array(nu * nv * 3);
+        const pos = (u: number, v: number, o: number[]) => {
+          if (kind === 'torus') {
+            const R = 0.66, r = 0.27;
+            o[0] = (R + r * Math.cos(v)) * Math.cos(u);
+            o[1] = r * Math.sin(v);
+            o[2] = (R + r * Math.cos(v)) * Math.sin(u);
+          } else if (kind === 'sphere') {
+            const ph = (v / TAU) * Math.PI; // v recorre de polo a polo
+            const r = 0.86 * (1 + 0.05 * Math.sin(3 * u) * Math.sin(4 * ph)); // leve relieve generativo
+            o[0] = r * Math.sin(ph) * Math.cos(u);
+            o[1] = r * Math.cos(ph);
+            o[2] = r * Math.sin(ph) * Math.sin(u);
+          } else {
+            // nudo de trébol con un tubo alrededor
+            const c = (t: number, q: number[]) => {
+              q[0] = (Math.sin(t) + 2 * Math.sin(2 * t)) * 0.27;
+              q[1] = (Math.cos(t) - 2 * Math.cos(2 * t)) * 0.27;
+              q[2] = -Math.sin(3 * t) * 0.27;
+            };
+            const a = [0, 0, 0], b = [0, 0, 0], m = [0, 0, 0];
+            c(u, m); c(u - 0.004, a); c(u + 0.004, b);
+            let tx = b[0] - a[0], ty = b[1] - a[1], tz = b[2] - a[2];
+            const tl = Math.hypot(tx, ty, tz); tx /= tl; ty /= tl; tz /= tl;
+            // normal: segunda derivada sin la componente tangente
+            let nx = a[0] + b[0] - 2 * m[0], ny = a[1] + b[1] - 2 * m[1], nz = a[2] + b[2] - 2 * m[2];
+            const d = nx * tx + ny * ty + nz * tz; nx -= d * tx; ny -= d * ty; nz -= d * tz;
+            const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+            const bx = ty * nz - tz * ny, by = tz * nx - tx * nz, bz = tx * ny - ty * nx;
+            const r = 0.13, cv = Math.cos(v), sv = Math.sin(v);
+            o[0] = m[0] + r * (cv * nx + sv * bx);
+            o[1] = m[1] + r * (cv * ny + sv * by);
+            o[2] = m[2] + r * (cv * nz + sv * bz);
+          }
+        };
+        const o = [0, 0, 0];
+        for (let i = 0; i < nu; i++)
+          for (let j = 0; j < nv; j++) {
+            pos((i / nu) * TAU, kind === 'sphere' ? (j / (nv - 1)) * TAU : (j / nv) * TAU, o);
+            const k = (i * nv + j) * 3;
+            p[k] = o[0]; p[k + 1] = o[1]; p[k + 2] = o[2];
+          }
+        // normales por diferencias finitas sobre la grilla
+        const n = new Float32Array(nu * nv * 3);
+        const at = (i: number, j: number) => ((((i % nu) + nu) % nu) * nv + Math.max(0, Math.min(nv - 1, kind === 'sphere' ? j : ((j % nv) + nv) % nv))) * 3;
+        for (let i = 0; i < nu; i++)
+          for (let j = 0; j < nv; j++) {
+            const a = at(i + 1, j), b = at(i - 1, j), c = at(i, j + 1), d = at(i, j - 1);
+            const ux = p[a] - p[b], uy = p[a + 1] - p[b + 1], uz = p[a + 2] - p[b + 2];
+            const vx = p[c] - p[d], vy = p[c + 1] - p[d + 1], vz = p[c + 2] - p[d + 2];
+            let x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx;
+            const k = (i * nv + j) * 3;
+            // orientar hacia afuera respecto del centro local
+            const l = Math.hypot(x, y, z) || 1;
+            x /= l; y /= l; z /= l;
+            if (kind === 'sphere' && x * p[k] + y * p[k + 1] + z * p[k + 2] < 0) { x = -x; y = -y; z = -z; }
+            n[k] = x; n[k + 1] = y; n[k + 2] = z;
+          }
+        if (kind !== 'sphere') {
+          // para tubo y toroide: normal = dirección desde el eje del tubo (signo consistente)
+          for (let i = 0; i < nu; i++) {
+            let cx = 0, cy = 0, cz = 0;
+            for (let j = 0; j < nv; j++) { const k = (i * nv + j) * 3; cx += p[k]; cy += p[k + 1]; cz += p[k + 2]; }
+            cx /= nv; cy /= nv; cz /= nv;
+            for (let j = 0; j < nv; j++) {
+              const k = (i * nv + j) * 3;
+              if (n[k] * (p[k] - cx) + n[k + 1] * (p[k + 1] - cy) + n[k + 2] * (p[k + 2] - cz) < 0) { n[k] = -n[k]; n[k + 1] = -n[k + 1]; n[k + 2] = -n[k + 2]; }
+            }
+          }
+        }
+        return { nu, nv, p, n, ringStep: kind === 'knot' ? 9 : 14, lineStep: kind === 'knot' ? 8 : kind === 'sphere' ? 17 : 12 };
+      }
+      const cache = new Map<string, Geo>();
+      const geoOf = (k: string) => (cache.has(k) ? cache.get(k)! : (cache.set(k, build(k)), cache.get(k)!));
+
+      /* ---------- Escena ---------- */
+      let W = 0, H = 0, dpr = 1;
+      const resize = () => {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth;
+        H = window.innerHeight;
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      };
+      resize();
+      window.addEventListener('resize', resize);
+
+      let sx = new Float32Array(1), sy = new Float32Array(1), sz = new Float32Array(1), sl = new Float32Array(1);
+      let zbuf = new Float32Array(1), lbuf = new Float32Array(1);
+      const L = (() => { const v = [-0.45, 0.6, 0.66]; const l = Math.hypot(...v); return v.map((x) => x / l); })();
+
+      let t = 0, ay = 0.6, last = performance.now(), frames = 0, fpsT = 0, autoPhase = 0;
+      const smoothstep = (a: number, b: number, x: number) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+
+      const frame = (now: number) => {
+        requestAnimationFrame(frame);
+        const dt = Math.min((now - last) / 1000, 0.05);
+        last = now;
+        const speed = +ui.speed.value, contrast = +ui.contrast.value, size = +ui.density.value;
+        t += dt * speed;
+        ay += dt * speed * 0.5;
+
+        // mezcla: manual o un barrido lento que va y vuelve
+        let mix = +ui.mix.value;
+        if (ui.auto.checked) {
+          autoPhase += dt * 0.12;
+          mix = 0.5 - 0.5 * Math.cos(autoPhase * TAU);
+          mix = smoothstep(0.08, 0.92, mix);
+          ui.mix.value = mix.toFixed(2);
+        }
+        $('o-density').textContent = `${size}px`;
+        $('o-contrast').textContent = contrast.toFixed(2);
+        $('o-speed').textContent = speed.toFixed(2);
+        $('o-mix').textContent = `${Math.round(mix * 100)}% ASCII`;
+
+        const g = geoOf(ui.shape.value);
+        const N = g.nu * g.nv;
+        if (sx.length !== N) { sx = new Float32Array(N); sy = new Float32Array(N); sz = new Float32Array(N); sl = new Float32Array(N); }
+
+        // rotación (Y y un leve vaivén en X) + perspectiva
+        const ax = 0.45 + Math.sin(t * 0.4) * 0.2;
+        const cY = Math.cos(ay), sY = Math.sin(ay), cX = Math.cos(ax), sX = Math.sin(ax);
+        const scale = Math.min(W, H) * 0.36, D = 3.4, cx = W / 2, cy = H / 2;
+        for (let i = 0; i < N; i++) {
+          const k = i * 3;
+          let x = g.p[k], y = g.p[k + 1], z = g.p[k + 2];
+          let x1 = x * cY + z * sY, z1 = -x * sY + z * cY;
+          let y2 = y * cX - z1 * sX, z2 = y * sX + z1 * cX;
+          const persp = D / (D - z2);
+          sx[i] = cx + x1 * scale * persp;
+          sy[i] = cy - y2 * scale * persp;
+          sz[i] = z2;
+          x = g.n[k]; y = g.n[k + 1]; z = g.n[k + 2];
+          x1 = x * cY + z * sY; z1 = -x * sY + z * cY;
+          y2 = y * cX - z1 * sX; const nz2 = y * sX + z1 * cX;
+          const diff = Math.max(0, x1 * L[0] + y2 * L[1] + nz2 * L[2]);
+          const rim = Math.pow(1 - Math.abs(nz2), 2.2);
+          sl[i] = 0.03 + Math.pow(diff, 1.15) * 0.9 + rim * 0.16;
+        }
+
+        // plano de corte en diagonal: a un lado ASCII, al otro wireframe
+        const ang = -0.55, ca = Math.cos(ang), sa = Math.sin(ang);
+        const span = scale * 1.25;
+        const cut = (x: number, y: number) => ((x - cx) * ca + (y - cy) * sa) / (2 * span) + 0.5; // 0..1
+        const edge = (size * 0.62 * 1.1) / (2 * span); // ≈ una celda de ancho
+
+        ctx.clearRect(0, 0, W, H);
+        // halo suave detrás del objeto
+        const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, scale * 1.4);
+        halo.addColorStop(0, 'rgba(109,33,60,0.20)');
+        halo.addColorStop(1, 'rgba(9,9,11,0)');
+        ctx.fillStyle = halo;
+        ctx.fillRect(0, 0, W, H);
+
+        /* --- ASCII --- */
+        const cw = size * 0.62, ch = size * 1.12;
+        const cols = Math.ceil(W / cw), rows = Math.ceil(H / ch);
+        if (zbuf.length !== cols * rows) { zbuf = new Float32Array(cols * rows); lbuf = new Float32Array(cols * rows); }
+        zbuf.fill(-1e9);
+        for (let i = 0; i < N; i++) {
+          const c = Math.floor(sx[i] / cw), r = Math.floor(sy[i] / ch);
+          if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+          const id = r * cols + c;
+          if (sz[i] > zbuf[id]) { zbuf[id] = sz[i]; lbuf[id] = sl[i]; }
+        }
+        const ramp = GLYPHS[ui.glyphs.value];
+        ctx.font = `${size}px "Geist Mono Variable", ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // agrupado por tono para pocos cambios de estilo
+        const buckets: number[][] = Array.from({ length: BANDS }, () => []);
+        const scanCells: number[] = [];
+        for (let id = 0; id < cols * rows; id++) {
+          if (zbuf[id] === -1e9) continue;
+          const c = id % cols, r = (id / cols) | 0;
+          const x = c * cw + cw / 2, y = r * ch + ch / 2;
+          const s = cut(x, y);
+          if (s > mix) continue; // lado wireframe
+          if (s > mix - edge) { scanCells.push(id); continue; } // borde del corte
+          // contraste y profundidad (lo lejano más oscuro)
+          let lum = 0.5 + (lbuf[id] - 0.5) * contrast;
+          lum *= 0.55 + 0.45 * (zbuf[id] + 1) / 2;
+          lum = Math.min(1, Math.max(0, lum));
+          if (lum < 0.04) continue;
+          buckets[Math.min(BANDS - 1, Math.floor(lum * BANDS))].push(id, Math.floor(lum * (ramp.length - 1)));
+        }
+        for (let b = 0; b < BANDS; b++) {
+          const list = buckets[b];
+          if (!list.length) continue;
+          ctx.fillStyle = BAND_COLORS[b];
+          for (let k = 0; k < list.length; k += 2) {
+            const id = list[k], c = id % cols, r = (id / cols) | 0;
+            const glyph = ramp[Math.max(1, list[k + 1])] ?? ramp[ramp.length - 1];
+            ctx.fillText(glyph, c * cw + cw / 2, r * ch + ch / 2);
+          }
+        }
+
+        /* --- Wireframe --- */
+        ctx.lineWidth = 1;
+        ctx.lineCap = 'round';
+        const depthBuckets = 6;
+        const paths: Path2D[] = Array.from({ length: depthBuckets }, () => new Path2D());
+        const seg = (a: number, b: number) => {
+          const mx = (sx[a] + sx[b]) / 2, my = (sy[a] + sy[b]) / 2;
+          const s = cut(mx, my);
+          if (s < mix - edge) return; // lado ASCII
+          const d = ((sz[a] + sz[b]) / 2 + 1) / 2; // 0 atrás → 1 adelante
+          const p = paths[Math.min(depthBuckets - 1, Math.max(0, Math.floor(d * depthBuckets)))];
+          p.moveTo(sx[a], sy[a]);
+          p.lineTo(sx[b], sy[b]);
+        };
+        const { nu, nv } = g;
+        const sphere = ui.shape.value === 'sphere';
+        // anillos (u fijo) y líneas longitudinales (v fijo)
+        for (let i = 0; i < nu; i += g.ringStep)
+          for (let j = 0; j < nv - (sphere ? 1 : 0); j++) seg(i * nv + j, i * nv + ((j + 1) % nv));
+        for (let j = 0; j < nv; j += g.lineStep)
+          for (let i = 0; i < nu; i++) seg(i * nv + j, ((i + 1) % nu) * nv + j);
+        for (let b = 0; b < depthBuckets; b++) {
+          const d = b / (depthBuckets - 1);
+          ctx.strokeStyle = `rgba(214,138,160,${(0.06 + Math.pow(d, 1.6) * 0.62 * Math.min(1.4, contrast)).toFixed(3)})`;
+          ctx.stroke(paths[b]);
+        }
+
+        /* --- Borde del corte: una línea fina de luz --- */
+        if (scanCells.length) {
+          ctx.fillStyle = 'rgba(244,236,239,0.7)';
+          for (const id of scanCells) {
+            const c = id % cols, r = (id / cols) | 0;
+            ctx.fillText('·', c * cw + cw / 2, r * ch + ch / 2);
+          }
+        }
+
+        frames++;
+        fpsT += dt;
+        if (fpsT > 0.5) {
+          ui.fps.textContent = `${Math.round(frames / fpsT)} fps · ${cols}×${rows} celdas`;
+          frames = 0;
+          fpsT = 0;
+        }
+      };
+      requestAnimationFrame(frame);
+
+      // mover la mezcla a mano desactiva la transición automática
+      ui.mix.addEventListener('input', () => (ui.auto.checked = false));
+    </script>
+
+    <style is:global>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        background: #09090b;
+        color: #f4f4f5;
+        font-family: 'Geist Variable', system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .tag {
+        position: fixed;
+        top: 2rem;
+        left: 2rem;
+      }
+      .tag__kicker,
+      .panel,
+      .fps {
+        font-family: 'Geist Mono Variable', ui-monospace, monospace;
+      }
+      .tag__kicker {
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #d68aa0;
+      }
+      .tag__title {
+        margin-top: 0.4rem;
+        font-size: 1.5rem;
+        font-weight: 500;
+        letter-spacing: -0.03em;
+      }
+      .tag__title span {
+        color: rgb(244 244 245 / 0.45);
+      }
+      .panel {
+        position: fixed;
+        left: 2rem;
+        bottom: 2rem;
+        width: min(300px, calc(100vw - 4rem));
+        display: grid;
+        gap: 0.85rem;
+        padding: 1.1rem 1.2rem;
+        border: 1px solid rgb(244 244 245 / 0.1);
+        border-radius: 12px;
+        background: rgb(23 23 26 / 0.72);
+        backdrop-filter: blur(10px);
+        font-size: 0.72rem;
+      }
+      .row {
+        display: grid;
+        gap: 0.4rem;
+      }
+      .row > span {
+        display: flex;
+        justify-content: space-between;
+        color: rgb(244 244 245 / 0.7);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      output {
+        color: #d68aa0;
+        text-transform: none;
+      }
+      input[type='range'] {
+        width: 100%;
+        accent-color: #8b2e4a;
+      }
+      select {
+        font: inherit;
+        color: #f4f4f5;
+        background: #17171a;
+        border: 1px solid rgb(244 244 245 / 0.16);
+        border-radius: 6px;
+        padding: 0.35rem 0.5rem;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: rgb(244 244 245 / 0.75);
+      }
+      .check input {
+        accent-color: #8b2e4a;
+      }
+      .fps {
+        font-size: 0.65rem;
+        color: rgb(244 244 245 / 0.4);
+      }
+      @media (max-width: 640px) {
+        .tag {
+          top: 1rem;
+          left: 1rem;
+        }
+        .panel {
+          left: 1rem;
+          right: 1rem;
+          bottom: 1rem;
+          width: auto;
+          gap: 0.6rem;
+        }
+      }
+    </style>
+  </body>
+</html>

@@ -142,6 +142,18 @@ function mountCopy() {
   });
 }
 
+/* ---------- Pausa de animaciones CSS fuera de pantalla ---------- */
+// Las animaciones infinitas (órbita de tecnologías, pulso del hero) siguen calculándose aunque
+// no se vean; con esto se detienen hasta que su sección vuelve a estar a la vista.
+function mountOffscreenPause() {
+  const io = new IntersectionObserver(
+    (entries) => entries.forEach((e) => e.target.classList.toggle('anim-paused', !e.isIntersecting)),
+    { rootMargin: '100px 0px' },
+  );
+  document.querySelectorAll('main > section').forEach((s) => io.observe(s));
+}
+
+mountOffscreenPause();
 mountReveal();
 mountPointerGlow();
 mountActiveSection();

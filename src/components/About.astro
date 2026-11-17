@@ -1,8 +1,9 @@
 ---
 import SectionHead from './SectionHead.astro';
+import AsciiPiece from './AsciiPiece.astro';
 ---
 
-<section id="sobre-mi" class="section about" data-field="waves" data-label="Sobre mí" aria-labelledby="sobre-mi-title">
+<section id="sobre-mi" class="section about" data-label="Sobre mí" aria-labelledby="sobre-mi-title">
   <div class="container">
     <SectionHead index={1} title="Sobre mí" id="sobre-mi-title" depth="-0.00" />
 
@@ -10,9 +11,13 @@ import SectionHead from './SectionHead.astro';
       <p class="about__statement" data-reveal>
         Lo que más disfruto es ver un sistema que funciona bien y además se ve bien. Ese es el equilibrio que busco en cada proyecto: que me convenza a mí y que le sirva al cliente.
       </p>
-      <p class="about__note" data-reveal style="--d:1">
-        No hago código por hacer código: cada decisión tiene que tener un porqué. Y un sistema nunca está del todo terminado; siempre hay algo para optimizar o simplificar para quien lo usa.
+      <div class="about__side">
+        <!-- Un harmonógrafo: péndulos en equilibrio que dibujan. Acompaña la idea de la frase. -->
+        <div class="about__art bg-art" aria-hidden="true"><AsciiPiece piece="harmonograph" /></div>
+        <p class="about__note" data-reveal style="--d:1">
+        Me gusta entender cómo trabaja quien va a usar lo que hago, para pensar el flujo más simple y eficiente para esa persona. Por eso sigo aprendiendo y pongo el foco en los procesos y en las interfaces.
       </p>
+      </div>
     </div>
   </div>
 </section>
@@ -32,6 +37,23 @@ import SectionHead from './SectionHead.astro';
     letter-spacing: -0.03em;
     max-width: 32ch;
     text-wrap: pretty;
+  }
+
+  .about__side {
+    display: grid;
+  }
+
+  /* detrás de la nota, a la derecha, más grande que el texto */
+  .about__art {
+    right: 2%;
+    top: 50%;
+    translate: 0 -50%;
+    --bg-art-opacity: 0.22;
+  }
+
+  .about__art :global(.ascii-piece) {
+    font-size: 12px;
+    zoom: 1.15;
   }
 
   .about__note {

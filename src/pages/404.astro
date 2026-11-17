@@ -1,9 +1,11 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import AsciiPiece from '../components/AsciiPiece.astro';
 ---
 
 <BaseLayout title="404 — Fuera del loop · Santiago Servera" description="La página que buscás no existe.">
   <main id="contenido" class="nf container">
+    <div class="nf__knot" aria-hidden="true"><AsciiPiece piece="torus-knot" /></div>
     <p class="mono accent">[404] · z ∞</p>
     <h1>Te saliste <em>del loop</em>.</h1>
     <p class="nf__lede">La página que buscás no existe o cambió de lugar.</p>
@@ -18,6 +20,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     align-content: center;
     justify-items: start;
     gap: 1.5rem;
+  }
+
+  .nf__knot {
+    color: var(--c-wine-tint);
+    opacity: 0.7;
+  }
+
+  .nf__knot :global(.ascii-piece) {
+    font-size: 12px;
+    zoom: 0.9;
   }
 
   h1 {

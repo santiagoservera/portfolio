@@ -1,7 +1,9 @@
 ---
 import SectionHead from './SectionHead.astro';
 import TechLogo from './TechLogo.astro';
-import { stackGroups, workflow, type Tech } from '../data/stack';
+import { stackGroups, type Tech } from '../data/stack';
+import { asciiLogos } from '../data/ascii-logos';
+import { logoLayers } from '../lib/ascii-logo';
 
 // Todas las tecnologías en órbita: la principal al centro y el resto por anillos.
 const all = stackGroups.flatMap((g) => g.items.map((t) => ({ ...t, ring: g.ring })));
@@ -12,15 +14,18 @@ const rings = ([1, 2, 3] as const).map((ring) => {
   return { ring, items: items.map((t, i) => ({ ...t, angle: offset + (360 / items.length) * i })) };
 });
 const isMain = (t: Tech) => t.id === core.id;
+// El centro muestra en ASCII la tecnología señalada; arranca con la principal.
+const first = logoLayers(asciiLogos[core.id]);
+const cycle = all.map((t) => t.id);
 ---
 
-<section id="tecnologias" class="section stack" data-field="orbits" data-label="Tecnologías" aria-labelledby="tecnologias-title">
+<section id="tecnologias" class="section stack" data-label="Tecnologías" aria-labelledby="tecnologias-title">
   <div class="container stack__grid">
     <div class="stack__head">
       <SectionHead index={4} title="Tecnologías" id="tecnologias-title" depth="-0.75" />
     </div>
 
-    <div class="orbit" aria-hidden="true" data-orbit data-field-center>
+    <div class="orbit" aria-hidden="true" data-orbit>
       {
         rings.map(({ ring, items }) => (
           <div class={`ring ring--${ring}`}>
@@ -38,7 +43,10 @@ const isMain = (t: Tech) => t.id === core.id;
         ))
       }
       <div class="core" data-planet={core.id}>
-        <TechLogo id={core.id} class="core__logo" />
+        <div class="core__ascii" data-core-ascii data-cycle={cycle.join(',')} data-current={core.id}>
+          <div class="core__lo" data-frame={first.lo}></div>
+          <div class="core__hi" data-frame={first.hi}></div>
+        </div>
       </div>
     </div>
 
@@ -49,7 +57,7 @@ const isMain = (t: Tech) => t.id === core.id;
             <dt class="group__label mono">{g.label}</dt>
             <dd class="group__items">
               {g.items.map((t) => (
-                <span class:list={['item', { 'item--main': isMain(t) }]} data-tech={t.id} data-field-react="ripple">
+                <span class:list={['item', { 'item--main': isMain(t) }]} data-tech={t.id}>
                   {t.name}
                   {isMain(t) && <span class="item__tag mono">principal</span>}
                 </span>
@@ -60,23 +68,68 @@ const isMain = (t: Tech) => t.id === core.id;
       }
     </dl>
 
-    <div class="workflow" data-reveal>
-      <div class="workflow__head">
-        <TechLogo id="claude" class="workflow__logo" />
-        <div>
-          <p class="workflow__kicker mono">Criterio</p>
-          <h3 class="workflow__title">{workflow.title}</h3>
-        </div>
-      </div>
-      <p class="workflow__body">{workflow.body}</p>
-      <ul class="workflow__tags mono">
-        {workflow.tags.map((t) => <li>{t}</li>)}
-      </ul>
-    </div>
   </div>
 </section>
 
 <script>
+  import { asciiLogos } from '../data/ascii-logos';
+  import { logoLayers, blendLayer } from '../lib/ascii-logo';
+  import type { TechId } from '../data/stack';
+
+  // Centro de la órbita: el logo en ASCII de la tecnología señalada, con un barrido de ruido al cambiar.
+  const screen = document.querySelector<HTMLElement>('[data-core-ascii]');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let showLogo: (id: string) => void = () => {};
+  let hovering = false;
+  if (screen) {
+    const lo = screen.querySelector<HTMLElement>('.core__lo')!;
+    const hi = screen.querySelector<HTMLElement>('.core__hi')!;
+    const cycle = (screen.dataset.cycle ?? '').split(',') as TechId[];
+    const seed = Array.from({ length: 32 * 16 }, () => Math.random());
+    let current = screen.dataset.current as TechId;
+    let anim = 0;
+    showLogo = (id) => {
+      if (id === current || !(id in asciiLogos)) return;
+      const from = logoLayers(asciiLogos[current]);
+      const to = logoLayers(asciiLogos[id as TechId]);
+      current = id as TechId;
+      cancelAnimationFrame(anim);
+      if (reduce) {
+        lo.dataset.frame = to.lo;
+        hi.dataset.frame = to.hi;
+        return;
+      }
+      const t0 = performance.now();
+      let last = 0;
+      const step = (now: number) => {
+        const p = Math.min(1, (now - t0) / 420);
+        if (now - last > 33 || p === 1) {
+          last = now;
+          lo.dataset.frame = blendLayer(from.lo, to.lo, p, seed);
+          hi.dataset.frame = blendLayer(from.hi, to.hi, p, seed);
+        }
+        if (p < 1) anim = requestAnimationFrame(step);
+      };
+      anim = requestAnimationFrame(step);
+    };
+
+    // Sin puntero (celular) o mientras nadie señala nada: recorre el stack, solo con la órbita a la vista.
+    if (!reduce) {
+      let i = 0;
+      let timer = 0;
+      const tick = () => {
+        if (hovering || document.hidden) return;
+        i = (i + 1) % cycle.length;
+        showLogo(cycle[i]);
+        document.querySelectorAll<HTMLElement>('[data-planet]').forEach((el) => el.classList.toggle('is-cur', el.dataset.planet === cycle[i]));
+      };
+      new IntersectionObserver(([e]) => {
+        clearInterval(timer);
+        if (e.isIntersecting) timer = window.setInterval(tick, 2400);
+      }).observe(screen);
+    }
+  }
+
   // Al pasar por un nombre de la lista se ilumina su logo en la órbita (y viceversa).
   const orbit = document.querySelector<HTMLElement>('[data-orbit]');
   if (orbit) {
@@ -85,6 +138,8 @@ const isMain = (t: Tech) => t.id === core.id;
         el.classList.toggle('is-hl', id !== null && (el.dataset.planet === id || el.dataset.tech === id));
       });
       orbit.classList.toggle('has-hl', id !== null);
+      hovering = id !== null;
+      if (id) showLogo(id);
     };
     document.querySelectorAll<HTMLElement>('[data-tech]').forEach((el) => {
       el.addEventListener('pointerenter', () => highlight(el.dataset.tech ?? null));
@@ -105,9 +160,9 @@ const isMain = (t: Tech) => t.id === core.id;
 
   .stack__grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: var(--split-art) var(--split-text);
     align-items: center;
-    gap: 2rem clamp(2rem, 5vw, 5rem);
+    gap: 2rem var(--split-gap);
   }
 
   .stack__head {
@@ -252,9 +307,43 @@ const isMain = (t: Tech) => t.id === core.id;
       0 0 40px var(--c-glow);
   }
 
-  .core :global(.core__logo) {
-    width: 100%;
-    height: 100%;
+  /* dos capas superpuestas, una por tinta; el texto va en ::before para no contar como texto de la página */
+  /* centrado absoluto y escalado con transform: zoom lo corre del centro del círculo */
+  .core__ascii {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    scale: var(--core-scale, 0.42);
+    display: grid;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    line-height: 1.12;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .core__ascii > div {
+    grid-area: 1 / 1;
+  }
+
+  .core__ascii > div::before {
+    content: attr(data-frame);
+    display: block;
+    white-space: pre;
+  }
+
+  .core__lo {
+    color: var(--c-wine-tint);
+  }
+
+  .core__hi {
+    color: var(--c-white);
+  }
+
+  /* el planeta que se está mostrando en el centro, mientras recorre solo */
+  .planet.is-cur .planet__inner {
+    border-color: rgb(214 138 160 / 0.6);
   }
 
   @keyframes spin {
@@ -323,89 +412,6 @@ const isMain = (t: Tech) => t.id === core.id;
     font-weight: 400;
   }
 
-  /* ---------- Flujo de trabajo con IA ---------- */
-  .workflow {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-    grid-template-areas: 'head body' 'steps steps';
-    gap: 1.5rem clamp(2rem, 5vw, 4rem);
-    margin-top: 1rem;
-    padding: clamp(1.25rem, 3vw, 2rem);
-    border: 1px solid var(--c-line);
-    border-radius: var(--radius);
-    background: linear-gradient(135deg, rgb(109 33 60 / 0.16), transparent 55%), rgb(23 23 26 / 0.5);
-  }
-
-  .workflow__head {
-    grid-area: head;
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-  }
-
-  .workflow__head :global(.workflow__logo) {
-    flex: none;
-    width: 40px;
-    height: 40px;
-    padding: 8px;
-    border-radius: 10px;
-    background: var(--c-surface);
-    border: 1px solid var(--c-line-strong);
-  }
-
-  .workflow__kicker {
-    color: var(--c-wine-tint);
-    margin-bottom: 0.35rem;
-  }
-
-  .workflow__title {
-    font-size: var(--fs-lg);
-    letter-spacing: -0.025em;
-    line-height: 1.2;
-  }
-
-  .workflow__body {
-    grid-area: body;
-    color: var(--c-fg-muted);
-    font-size: var(--fs-sm);
-    line-height: 1.65;
-  }
-
-  .workflow__tags {
-    grid-area: steps;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--c-line);
-  }
-
-  .workflow__tags li {
-    padding: 0.35rem 0.75rem;
-    border-radius: 999px;
-    border: 1px solid var(--c-line-strong);
-    color: var(--c-fg-muted);
-    text-transform: none;
-    letter-spacing: 0;
-    transition:
-      color 0.25s,
-      border-color 0.25s;
-  }
-
-  .workflow__tags li:hover {
-    color: var(--c-white);
-    border-color: rgb(214 138 160 / 0.5);
-  }
-
-  @media (max-width: 899px) {
-    .workflow {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: 'head' 'body' 'steps';
-    }
-
-  }
-
   @media (max-width: 899px) {
     .stack__grid {
       grid-template-columns: minmax(0, 1fr);
@@ -419,6 +425,10 @@ const isMain = (t: Tech) => t.id === core.id;
 
     .planet__inner {
       padding: 9px;
+    }
+
+    .core__ascii {
+      --core-scale: 0.3;
     }
   }
 

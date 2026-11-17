@@ -73,6 +73,10 @@ const sections = [{ id: 'top', label: 'Inicio' }, ...nav];
       let lastFlicker = 0;
       let raf = 0;
 
+      // El bucle por cuadro solo corre mientras hay scroll (y un instante después).
+      // En reposo, el giroscopio y el parpadeo avanzan a ~8 cuadros/s con un temporizador.
+      let lastScroll = -1e9;
+      let idleTimer = 0;
       const tick = (now: number) => {
         const y = window.scrollY;
         vel += (Math.abs(y - lastY) - vel) * 0.12;
@@ -96,13 +100,24 @@ const sections = [{ id: 'top', label: 'Inicio' }, ...nav];
           }
           stream.textContent = chars.join('');
         }
-        raf = requestAnimationFrame(tick);
+        if (now - lastScroll < 400) raf = requestAnimationFrame(tick);
+        else raf = 0;
       };
-
+      const active = () => wide.matches && !document.hidden;
+      const kick = () => {
+        lastScroll = performance.now();
+        if (!raf && active()) raf = requestAnimationFrame(tick);
+      };
+      const idle = () => {
+        if (!raf && active()) tick(performance.now());
+      };
       const start = () => {
         cancelAnimationFrame(raf);
-        if (wide.matches && !document.hidden) raf = requestAnimationFrame(tick);
+        raf = 0;
+        window.clearInterval(idleTimer);
+        if (active()) idleTimer = window.setInterval(idle, 125);
       };
+      window.addEventListener('scroll', kick, { passive: true });
       wide.addEventListener('change', start);
       document.addEventListener('visibilitychange', start);
       start();
@@ -246,6 +261,8 @@ const sections = [{ id: 'top', label: 'Inicio' }, ...nav];
   }
 
   .ruler {
+    overflow: hidden;
+    contain: strict;
     position: relative;
     width: 14px;
     height: 150px;

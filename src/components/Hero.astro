@@ -1,11 +1,8 @@
 ---
 import Icon from './Icon.astro';
 import { profile } from '../data/profile';
-import { asciiTunnel } from '../lib/ascii';
+import AsciiPiece from './AsciiPiece.astro';
 
-const tunnel = asciiTunnel(150, 52);
-// versión para celular: proporción vertical, letra legible sin escalar
-const tunnelMobile = asciiTunnel(54, 40);
 ---
 
 <section id="top" class="hero" data-label="Inicio" aria-labelledby="hero-title">
@@ -15,8 +12,8 @@ const tunnelMobile = asciiTunnel(54, 40);
   -->
   <div class="hero__stage" data-hero-stage>
   <!-- Fallback ASCII: visible sin WebGL / sin JS. El canvas lo reemplaza si WebGL inicia. -->
-  <pre class="hero__ascii hero__ascii--wide" aria-hidden="true">{tunnel}</pre>
-  <pre class="hero__ascii hero__ascii--narrow" aria-hidden="true">{tunnelMobile}</pre>
+  <!-- Túnel ASCII animado (ascii.rest): se ve hasta que arranca el túnel 3D, o siempre si no hay WebGL -->
+  <div class="hero__ascii" aria-hidden="true"><AsciiPiece piece="tunnel" /></div>
   <canvas class="hero__canvas" aria-hidden="true" data-wormhole></canvas>
   <div class="hero__vignette" aria-hidden="true"></div>
   <p class="hero__hint mono" aria-hidden="true">← deslizá para girar · tocá →</p>
@@ -121,7 +118,11 @@ const tunnelMobile = asciiTunnel(54, 40);
             getProgress: mobile ? getProgress : undefined,
             touchTarget: stage,
             onInteract: () => hero.classList.add('hint-done'),
-            onReady: () => hero.classList.add('has-webgl'),
+            onReady: () => {
+              hero.classList.add('has-webgl');
+              // el túnel 3D lo reemplaza: el ASCII deja de animarse
+              hero.querySelector('.hero__ascii .ascii-piece')?.dispatchEvent(new Event('ascii:stop'));
+            },
             onFail: fail,
           }),
         )
@@ -179,6 +180,7 @@ const tunnelMobile = asciiTunnel(54, 40);
   }
 
 
+
   .hero__canvas {
     position: fixed;
     inset: 0;
@@ -202,12 +204,6 @@ const tunnelMobile = asciiTunnel(54, 40);
     display: grid;
     place-items: center;
     overflow: hidden;
-    /* fuente monoespaciada del sistema: se pinta en el primer cuadro sin esperar descargas */
-    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
-    /* tamaño legible para el navegador; se achica visualmente con scale */
-    font-size: 12px;
-    line-height: 1.15;
-    scale: 0.9;
     color: var(--c-wine-2);
     opacity: 0.75;
     transition: opacity 1s var(--ease-out);
@@ -216,8 +212,28 @@ const tunnelMobile = asciiTunnel(54, 40);
     mask-image: radial-gradient(ellipse at 60% 50%, #000 30%, transparent 75%);
   }
 
-  .hero__ascii--narrow {
-    display: none;
+  /* 64 columnas: el tamaño de letra define el ancho del túnel */
+  .hero__ascii :global(.ascii-piece) {
+    /* fuente monoespaciada del sistema: se pinta en el primer cuadro sin esperar descargas */
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: 12px;
+    zoom: 1.5; /* 18px en pantallas grandes */
+    line-height: 1.12;
+    /* bordes difusos: el túnel se funde con el fondo en lugar de verse como un rectángulo */
+    -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 45%, transparent 100%);
+    mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 45%, transparent 100%);
+  }
+
+  @media (max-width: 1200px) {
+    .hero__ascii :global(.ascii-piece) {
+      zoom: 1.15;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .hero__ascii :global(.ascii-piece) {
+      zoom: 0.75; /* ~9px: 64 columnas entran en el celular */
+    }
   }
 
   .hero.has-webgl .hero__ascii {
@@ -445,6 +461,14 @@ const tunnelMobile = asciiTunnel(54, 40);
       touch-action: pan-y;
     }
 
+    /* el hero queda fijo y Sobre mí pasa por encima: el túnel y la viñeta se desvanecen
+       abajo para no marcar una línea contra la galaxia */
+    .hero__canvas,
+    .hero__vignette {
+      -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+      mask-image: linear-gradient(to bottom, #000 72%, transparent);
+    }
+
     .hero__canvas {
       position: absolute;
       transform: scale(0.5);
@@ -457,12 +481,7 @@ const tunnelMobile = asciiTunnel(54, 40);
       transform: none;
     }
 
-    .hero__ascii--wide {
-      display: none;
-    }
-
-    .hero__ascii--narrow {
-      display: grid;
+    .hero__ascii {
       bottom: auto;
       height: 64svh;
       scale: 1;
@@ -476,8 +495,6 @@ const tunnelMobile = asciiTunnel(54, 40);
 
     .hero__vignette {
       background: linear-gradient(to bottom, rgb(9 9 11 / 0.45), transparent 18%, transparent 46%, rgb(9 9 11 / 0.82) 64%);
-      -webkit-mask-image: none;
-      mask-image: none;
     }
 
     .hero__inner {

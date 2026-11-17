@@ -4,7 +4,7 @@ import { nav, profile } from '../data/profile';
 
 <header class="header">
   <div class="header__inner container">
-    <a href="#top" class="brand" aria-label={`${profile.name}, volver al inicio`}>
+    <a href="#top" class="brand" aria-label="santiago.servera, volver al inicio">
       <span class="brand__mark" aria-hidden="true">
         <svg viewBox="0 0 32 32" fill="none">
           <ellipse cx="16" cy="16" rx="13" ry="5.5" stroke="currentColor" stroke-width="1.4" />
@@ -187,7 +187,8 @@ import { nav, profile } from '../data/profile';
       flex-direction: column;
       justify-content: space-between;
       padding: 7rem var(--gutter) 2.5rem;
-      background: var(--c-black);
+      /* el fondo solo existe con el menú abierto: cerrado no debe tapar las capas de atrás */
+      background: transparent;
       visibility: hidden;
       opacity: 0;
       transition:
@@ -198,6 +199,7 @@ import { nav, profile } from '../data/profile';
     :global(html.menu-open) .nav {
       visibility: visible;
       opacity: 1;
+      background: var(--c-black);
     }
 
     :global(html.menu-open) {

@@ -2,19 +2,65 @@
 import SectionHead from './SectionHead.astro';
 import ProjectCard from './ProjectCard.astro';
 import { projects } from '../data/projects';
+import AsciiPiece from './AsciiPiece.astro';
+
+// Índice de los proyectos como árbol de carpetas (solo funcionalidades descritas, nada inventado).
+const entries = [
+  'kodloop/',
+  '  README.md',
+  'motoros/',
+  '  inventario/',
+  '  clientes/',
+  '  leads/',
+  '  reservas/',
+  '  ventas/',
+  '  README.md',
+  'di-parola-automotores/',
+  '  README.md',
+  'lubricentro-mya/',
+  '  demo/',
+].join('\n');
 ---
 
-<section id="proyectos" class="section" data-field="grid" data-label="Proyectos" aria-labelledby="proyectos-title">
+<section id="proyectos" class="section proj" data-label="Proyectos" aria-labelledby="proyectos-title">
   <div class="container">
     <SectionHead index={3} title="Proyectos" id="proyectos-title" depth="-0.50" />
 
-    <div class="projects">
-      {projects.map((p, i) => <ProjectCard project={p} index={i + 1} />)}
+    <div class="proj__layout">
+      <!-- Índice de la sección: los proyectos como árbol de carpetas (solo escritorio) -->
+      <div class="proj__tree bg-art" aria-hidden="true">
+        <AsciiPiece piece="file-tree" options={{ root: '~/proyectos', entries }} />
+      </div>
+
+      <div class="projects">
+        {projects.map((p, i) => <ProjectCard project={p} index={i + 1} />)}
+      </div>
     </div>
   </div>
 </section>
 
 <style>
+  .proj__layout {
+    position: relative;
+  }
+
+  /* el árbol va detrás de las tarjetas: se lee entre los huecos y las descripciones */
+  /* espejo de Experiencia: en el margen izquierdo, perdiéndose hacia el borde de la pantalla */
+  .proj__tree {
+    right: calc(100% - 5.5rem); /* asoma desde el borde y pasa por detrás de la primera tarjeta */
+    /* a la altura de la imagen de la tarjeta (opaca): pasa por detrás de la captura,
+       sin tocar títulos ni descripciones */
+    top: 4.5rem;
+    --bg-art-opacity: 0.4;
+    -webkit-mask-image: linear-gradient(to left, #000 45%, transparent 100%);
+    mask-image: linear-gradient(to left, #000 45%, transparent 100%);
+  }
+
+  .proj__tree :global(.ascii-piece) {
+    font-size: 12px;
+    zoom: 0.72; /* el árbol desplegado mide lo mismo que la imagen */
+  }
+
   .projects {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -27,6 +73,22 @@ import { projects } from '../data/projects';
     }
   }
 
+  /* Tablet y celular: el árbol asoma desde el borde derecho, al lado del título de la primera
+     tarjeta (que es corto) y sigue por detrás de su captura, que lo tapa */
+  @media (max-width: 1099px) {
+    .proj__tree {
+      right: -30%;
+      left: auto;
+      top: 0;
+      --bg-art-opacity: 0.22;
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 30%, #000 55%, transparent 90%);
+      mask-image: linear-gradient(to right, transparent, #000 30%, #000 55%, transparent 90%);
+    }
+
+    .proj__tree :global(.ascii-piece) {
+      zoom: 0.8;
+    }
+  }
   @media (max-width: 760px) {
     .projects {
       grid-template-columns: minmax(0, 1fr);

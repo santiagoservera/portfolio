@@ -22,36 +22,6 @@ function hash(str: string) {
 }
 
 /**
- * Túnel visto de frente: anillos concéntricos con espaciado en perspectiva.
- * Fallback estático del agujero de gusano del hero.
- */
-export function asciiTunnel(cols = 120, rows = 44): string {
-  const lines: string[] = [];
-  const cx = cols / 2;
-  const cy = rows / 2;
-  const aspect = 2.1; // las celdas monoespaciadas son más altas que anchas
-  for (let y = 0; y < rows; y++) {
-    let line = '';
-    for (let x = 0; x < cols; x++) {
-      const dx = (x - cx) / aspect;
-      const dy = y - cy;
-      const r = Math.hypot(dx, dy) + 0.0001;
-      const angle = Math.atan2(dy, dx);
-      // profundidad aparente: 1/r → anillos cada vez más juntos hacia el centro
-      const depth = 26 / r;
-      const ring = Math.abs(Math.sin(depth * Math.PI));
-      const spoke = Math.abs(Math.sin(angle * 12 + depth * 0.6));
-      const v = Math.max(ring > 0.93 ? 1 - (1 - ring) * 6 : 0, spoke > 0.985 ? 0.55 : 0);
-      const fade = Math.min(1, r / 4) * Math.max(0, 1 - r / (cols / aspect / 1.6));
-      const idx = Math.round(v * fade * (RAMP.length - 1));
-      line += RAMP[Math.max(0, Math.min(RAMP.length - 1, idx))];
-    }
-    lines.push(line);
-  }
-  return lines.join('\n');
-}
-
-/**
  * Campo de interferencia determinista por semilla, usado como placeholder
  * de las capturas de proyectos que todavía no están disponibles.
  */

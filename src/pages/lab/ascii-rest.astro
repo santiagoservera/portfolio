@@ -1,0 +1,175 @@
+---
+/**
+ * Laboratorio: galería de piezas de ascii.rest (MIT) con la paleta del sitio, para evaluar
+ * cuáles tienen calidad suficiente para el portfolio. Prueba aislada: noindex, fuera del sitemap.
+ */
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+
+const pieces = [
+  { id: 'icosahedron', group: 'Formas 3D' },
+  { id: 'torus-knot', group: 'Formas 3D' },
+  { id: 'tesseract', group: 'Formas 3D' },
+  { id: 'gyroscope', group: 'Formas 3D' },
+  { id: 'mobius-strip', group: 'Formas 3D' },
+  { id: 'twisted-ring', group: 'Formas 3D' },
+  { id: 'dna-helix', group: 'Formas 3D' },
+  { id: 'tunnel', group: 'Efectos' },
+  { id: 'flow-field', group: 'Generativo' },
+  { id: 'harmonograph', group: 'Generativo' },
+  { id: 'wave-interference', group: 'Generativo' },
+  { id: 'boot-log', group: 'Interfaz' },
+  { id: 'terminal', group: 'Interfaz' },
+  { id: 'file-tree', group: 'Interfaz' },
+];
+---
+
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Laboratorio · ascii.rest</title>
+  </head>
+  <body>
+    <header class="head">
+      <p class="kicker">Laboratorio · prueba aislada</p>
+      <h1>ascii.rest, con la paleta KodLoop</h1>
+      <label class="tone">
+        Tinta
+        <select id="ink">
+          <option value="tint">Rosado</option>
+          <option value="white">Blanco suave</option>
+          <option value="grad">Degradé bordó</option>
+        </select>
+      </label>
+    </header>
+
+    <main class="grid">
+      {
+        pieces.map((p) => (
+          <figure class="cell" data-piece={p.id}>
+            <pre class="art" aria-hidden="true" />
+            <figcaption>
+              <span>{p.id}</span>
+              <span class="group">{p.group}</span>
+            </figcaption>
+          </figure>
+        ))
+      }
+    </main>
+
+    <script>
+      import { mount, load } from 'ascii.rest';
+
+      // Cada pieza se monta solo mientras está en pantalla.
+      document.querySelectorAll<HTMLElement>('[data-piece]').forEach((cell) => {
+        const pre = cell.querySelector<HTMLElement>('.art')!;
+        const name = cell.dataset.piece as keyof typeof load;
+        let stop: null | (() => void) = null;
+        new IntersectionObserver(async ([e]) => {
+          if (e.isIntersecting && !stop) {
+            const piece = await load[name]();
+            stop = mount(pre, piece);
+          } else if (!e.isIntersecting && stop) {
+            stop();
+            stop = null;
+          }
+        }).observe(cell);
+      });
+
+      const ink = document.getElementById('ink') as HTMLSelectElement;
+      ink.addEventListener('change', () => (document.body.dataset.ink = ink.value));
+    </script>
+
+    <style is:global>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        background: #09090b;
+        color: #f4f4f5;
+        font-family: 'Geist Variable', system-ui, sans-serif;
+        padding: 2rem;
+      }
+      .head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 1rem 2rem;
+        margin-bottom: 2rem;
+      }
+      .kicker {
+        font: 0.72rem 'Geist Mono Variable', monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #d68aa0;
+      }
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 500;
+        letter-spacing: -0.03em;
+        flex: 1;
+      }
+      .tone {
+        font: 0.72rem 'Geist Mono Variable', monospace;
+        color: rgb(244 244 245 / 0.7);
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      select {
+        font: inherit;
+        color: #f4f4f5;
+        background: #17171a;
+        border: 1px solid rgb(244 244 245 / 0.16);
+        border-radius: 6px;
+        padding: 0.3rem 0.5rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1rem;
+      }
+      .cell {
+        display: grid;
+        grid-template-rows: 1fr auto;
+        border: 1px solid rgb(244 244 245 / 0.08);
+        border-radius: 12px;
+        background: radial-gradient(ellipse at 50% 40%, rgb(109 33 60 / 0.16), transparent 70%), #0d0d10;
+        overflow: hidden;
+        min-height: 300px;
+      }
+      .art {
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+        font: 9px/1.1 'Geist Mono Variable', ui-monospace, monospace;
+        color: #d68aa0;
+        overflow: hidden;
+      }
+      body[data-ink='white'] .art {
+        color: rgb(244 244 245 / 0.82);
+      }
+      body[data-ink='grad'] .art {
+        background: linear-gradient(160deg, #f4f4f5 5%, #d68aa0 35%, #8b2e4a 70%, #6d213c 95%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      figcaption {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.6rem 0.9rem;
+        border-top: 1px solid rgb(244 244 245 / 0.08);
+        font: 0.7rem 'Geist Mono Variable', monospace;
+        color: rgb(244 244 245 / 0.75);
+      }
+      .group {
+        color: rgb(244 244 245 / 0.4);
+      }
+    </style>
+  </body>
+</html>
